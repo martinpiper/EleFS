@@ -475,6 +475,7 @@ namespace EleFSLib
 
 	EleFS::File *EleFS::FileOpen(const WCHAR *filename, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		bool needLock = false;
 		if ((dwCreationDisposition == CREATE_NEW) ||
@@ -502,7 +503,7 @@ namespace EleFSLib
 				return 0;
 			}
 		}
-		if ((dwCreationDisposition == OPEN_EXISTING) || (dwCreationDisposition == TRUNCATE_EXISTING))
+		else if ((dwCreationDisposition == OPEN_EXISTING) || (dwCreationDisposition == TRUNCATE_EXISTING))
 		{
 			searchHandle = FindEntryInDirectory(mHeader,blobFile,filename,firstEntryInDirectory,entry,directoryHandle);
 			if (!searchHandle)
@@ -518,7 +519,7 @@ namespace EleFSLib
 				entry.mFileSize = 0;
 			}
 		}
-		if (dwCreationDisposition == OPEN_ALWAYS)
+		else if (dwCreationDisposition == OPEN_ALWAYS)
 		{
 			searchHandle = FindEntryInDirectory(mHeader,blobFile,filename,firstEntryInDirectory,entry,directoryHandle);
 			if (searchHandle)
@@ -530,10 +531,12 @@ namespace EleFSLib
 				dwCreationDisposition = CREATE_NEW;	// Use the if below
 			}
 		}
-		if (dwCreationDisposition == CREATE_ALWAYS)
+		else if (dwCreationDisposition == CREATE_ALWAYS)
 		{
 			DeleteFile(filename);
+			firstEntryInDirectory = 0;
 		}
+
 		if ((dwCreationDisposition == CREATE_NEW) || (dwCreationDisposition == CREATE_ALWAYS))
 		{
 			searchHandle = FindEntryInDirectory(mHeader,blobFile,filename,firstEntryInDirectory,entry,directoryHandle,true);
@@ -560,6 +563,7 @@ namespace EleFSLib
 			theFile->mDataHandle = entry.mHandle;
 			theFile->mFileSize = entry.mFileSize;
 			theFile->mFilePointer = 0;
+
 			return theFile;
 		}
 
@@ -568,6 +572,7 @@ namespace EleFSLib
 
 	BOOL EleFS::WriteFile(File *hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -639,6 +644,7 @@ namespace EleFSLib
 
 	BOOL EleFS::ReadFile(File *hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(false);
 
@@ -690,6 +696,7 @@ namespace EleFSLib
 
 	BOOL EleFS::SetEndOfFile(File *hFile)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -752,6 +759,7 @@ namespace EleFSLib
 
 	BOOL EleFS::CloseFile(File *hFile)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 
 		if (!hFile || (&hFile->mFS != this))
@@ -768,6 +776,7 @@ namespace EleFSLib
 
 	BOOL EleFS::CreateDirectory(const WCHAR *filename)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -782,6 +791,7 @@ namespace EleFSLib
 
 	DWORD EleFS::GetFileAttributes(const WCHAR *filename)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(false);
 
@@ -803,6 +813,10 @@ namespace EleFSLib
 					attrs = attrs | FILE_ATTRIBUTE_DIRECTORY;
 				}
 			}
+			else
+			{
+				attrs = INVALID_FILE_ATTRIBUTES;
+			}
 		}
 
 		if (attrs == INVALID_FILE_ATTRIBUTES)
@@ -814,6 +828,7 @@ namespace EleFSLib
 
 	BOOL EleFS::SetFileAttributes(const WCHAR *filename, DWORD dwFileAttributes)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -847,6 +862,7 @@ namespace EleFSLib
 
 	BOOL EleFS::GetFileTime(File *hFile, LPFILETIME lpCreationTime, LPFILETIME lpLastAccessTime, LPFILETIME lpLastWriteTime)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(false);
 
@@ -880,6 +896,7 @@ namespace EleFSLib
 
 	BOOL EleFS::SetFileTime(File *hFile, const FILETIME *lpCreationTime, const FILETIME *lpLastAccessTime, const FILETIME *lpLastWriteTime)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -919,6 +936,7 @@ namespace EleFSLib
 
 	BOOL EleFS::GetFileInformation(File *hFile, LPBY_HANDLE_FILE_INFORMATION lpFileInformation)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(false);
 
@@ -968,6 +986,7 @@ namespace EleFSLib
 
 	HANDLE EleFS::FindFirstFileW(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData)
 	{
+		SetLastError(ERROR_SUCCESS);
 		if (!lpFileName || !lpFindFileData)
 		{
 			SetLastError(ERROR_INVALID_FUNCTION);
@@ -1044,6 +1063,7 @@ namespace EleFSLib
 
 	BOOL EleFS::FindNextFileW(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData)
 	{
+		SetLastError(ERROR_SUCCESS);
 		if (!hFindFile || (hFindFile == INVALID_HANDLE_VALUE) || !lpFindFileData)
 		{
 			SetLastError(ERROR_INVALID_HANDLE);
@@ -1065,6 +1085,7 @@ namespace EleFSLib
 
 	BOOL EleFS::FindClose(HANDLE hFindFile)
 	{
+		SetLastError(ERROR_SUCCESS);
 		if (!hFindFile || (hFindFile == INVALID_HANDLE_VALUE))
 		{
 			return FALSE;
@@ -1077,6 +1098,7 @@ namespace EleFSLib
 
 	BOOL EleFS::DeleteFile(const WCHAR *filename)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 
@@ -1099,6 +1121,7 @@ namespace EleFSLib
 
 	BOOL EleFS::Rename(const WCHAR *existingPath, const WCHAR *newPath)
 	{
+		SetLastError(ERROR_SUCCESS);
 		LOCK();
 		FSLOCK(true);
 

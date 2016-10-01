@@ -345,6 +345,20 @@ int main(int argc, char **argv)
 
 		CheckFail(fs.CloseFile(file));
 
+		file = fs.FileOpen(L"Directory1\\Directory2\\Moo.txt",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL);
+
+		if (!fs.WriteFile(file,testBlock,256,&numBytes))
+		{
+			PrintFailed("Failed to write EleFS file");
+		}
+		if (numBytes != 256)
+		{
+			PrintFailed("Failed to get the expected number of written bytes");
+		}
+
+		CheckFail(fs.CloseFile(file));
+
+
 		DWORD attrs;
 		attrs = fs.GetFileAttributes(L"\\");
 		CheckFail(attrs == FILE_ATTRIBUTE_DIRECTORY);
@@ -352,6 +366,10 @@ int main(int argc, char **argv)
 		CheckFail(attrs == FILE_ATTRIBUTE_DIRECTORY);
 		attrs = fs.GetFileAttributes(L"Directory1\\Directory2\\Moo.txt");
 		CheckFail(attrs == FILE_ATTRIBUTE_NORMAL);
+		attrs = fs.GetFileAttributes(L"Directory1\\Directory2\\ReallyNotThereFile.txt");
+		CheckFail(attrs == INVALID_FILE_ATTRIBUTES);
+
+
 
 		file = fs.FileOpen(L"Directory1\\Directory2\\Moo.txt",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL);
 

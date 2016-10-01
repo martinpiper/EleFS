@@ -1,28 +1,7 @@
 /*
-Dokan : user-mode file system library for Windows
-
-Copyright (C) 2015 - 2016 Adrien J. <liryna.stark@gmail.com> and Maxime C. <maxime@islog.com>
-Copyright (C) 2007 - 2011 Hiroki Asakawa <info@dokan-dev.net>
-
-http://dokan-dev.github.io
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Options:
+/f C:\temp\container.EleFs /l M:\ /s /d /m
+/f C:\temp\container.EleFs /l M:\ /m
 */
 
 #define WIN32_NO_STATUS
@@ -187,197 +166,215 @@ static NTSTATUS DOKAN_CALLBACK
 	MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 	ACCESS_MASK DesiredAccess, ULONG FileAttributes,
 	ULONG ShareAccess, ULONG CreateDisposition,
-	ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
-		EleFS::File* handle;
-		DWORD fileAttr;
-		NTSTATUS status = STATUS_SUCCESS;
-		DWORD creationDisposition;
-		DWORD fileAttributesAndFlags;
-		DWORD error = 0;
-		SECURITY_ATTRIBUTES securityAttrib;
+	ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo)
+{
+	EleFS::File* handle;
+	DWORD fileAttr;
+	NTSTATUS status = STATUS_SUCCESS;
+	DWORD creationDisposition;
+	DWORD fileAttributesAndFlags;
+	DWORD error = 0;
+	SECURITY_ATTRIBUTES securityAttrib;
 
-		securityAttrib.nLength = sizeof(securityAttrib);
-		securityAttrib.lpSecurityDescriptor =
-			SecurityContext->AccessState.SecurityDescriptor;
-		securityAttrib.bInheritHandle = FALSE;
+	securityAttrib.nLength = sizeof(securityAttrib);
+	securityAttrib.lpSecurityDescriptor =
+		SecurityContext->AccessState.SecurityDescriptor;
+	securityAttrib.bInheritHandle = FALSE;
 
-		DokanMapKernelToUserCreateFileFlags(
-			FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
-			&creationDisposition);
+	DokanMapKernelToUserCreateFileFlags(
+		FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
+		&creationDisposition);
 
-		DbgPrint(L"CreateFile : %s\n", FileName);
+	DbgPrint(L"CreateFile : %s\n", FileName);
 
-		PrintUserName(DokanFileInfo);
+	if (creationDisposition == CREATE_NEW)
+	{
+		DbgPrint(L"\tCREATE_NEW\n");
+	}
+	else if (creationDisposition == OPEN_ALWAYS)
+	{
+		DbgPrint(L"\tOPEN_ALWAYS\n");
+	}
+	else if (creationDisposition == CREATE_ALWAYS)
+	{
+		DbgPrint(L"\tCREATE_ALWAYS\n");
+	}
+	else if (creationDisposition == OPEN_EXISTING)
+	{
+		DbgPrint(L"\tOPEN_EXISTING\n");
+	}
+	else if (creationDisposition == TRUNCATE_EXISTING)
+	{
+		DbgPrint(L"\tTRUNCATE_EXISTING\n");
+	}
+	else
+	{
+		DbgPrint(L"\tUNKNOWN creationDisposition!\n");
+	}
 
-		/*
-		if (ShareMode == 0 && AccessMode & FILE_WRITE_DATA)
-		ShareMode = FILE_SHARE_WRITE;
-		else if (ShareMode == 0)
-		ShareMode = FILE_SHARE_READ;
-		*/
+	PrintUserName(DokanFileInfo);
 
-		DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
+	/*
+	if (ShareMode == 0 && AccessMode & FILE_WRITE_DATA)
+	ShareMode = FILE_SHARE_WRITE;
+	else if (ShareMode == 0)
+	ShareMode = FILE_SHARE_READ;
+	*/
 
-		MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
-		MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
-		MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
+	DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
-		DbgPrint(L"\tAccessMode = 0x%x\n", DesiredAccess);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
+	MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
 
-		MirrorCheckFlag(DesiredAccess, GENERIC_READ);
-		MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
-		MirrorCheckFlag(DesiredAccess, GENERIC_EXECUTE);
+	DbgPrint(L"\tAccessMode = 0x%x\n", DesiredAccess);
 
-		MirrorCheckFlag(DesiredAccess, DELETE);
-		MirrorCheckFlag(DesiredAccess, FILE_READ_DATA);
-		MirrorCheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
-		MirrorCheckFlag(DesiredAccess, FILE_READ_EA);
-		MirrorCheckFlag(DesiredAccess, READ_CONTROL);
-		MirrorCheckFlag(DesiredAccess, FILE_WRITE_DATA);
-		MirrorCheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
-		MirrorCheckFlag(DesiredAccess, FILE_WRITE_EA);
-		MirrorCheckFlag(DesiredAccess, FILE_APPEND_DATA);
-		MirrorCheckFlag(DesiredAccess, WRITE_DAC);
-		MirrorCheckFlag(DesiredAccess, WRITE_OWNER);
-		MirrorCheckFlag(DesiredAccess, SYNCHRONIZE);
-		MirrorCheckFlag(DesiredAccess, FILE_EXECUTE);
-		MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
-		MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
-		MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_READ);
+	MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
+	MirrorCheckFlag(DesiredAccess, GENERIC_EXECUTE);
 
-		// When filePath is a directory, needs to change the flag so that the file can
-		// be opened.
-		fileAttr = sFS.GetFileAttributes(FileName);
+	MirrorCheckFlag(DesiredAccess, DELETE);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_READ_EA);
+	MirrorCheckFlag(DesiredAccess, READ_CONTROL);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_DATA);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
+	MirrorCheckFlag(DesiredAccess, FILE_WRITE_EA);
+	MirrorCheckFlag(DesiredAccess, FILE_APPEND_DATA);
+	MirrorCheckFlag(DesiredAccess, WRITE_DAC);
+	MirrorCheckFlag(DesiredAccess, WRITE_OWNER);
+	MirrorCheckFlag(DesiredAccess, SYNCHRONIZE);
+	MirrorCheckFlag(DesiredAccess, FILE_EXECUTE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
+	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
 
-		if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-			(fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-			!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
-				DokanFileInfo->IsDirectory = TRUE;
-				if (DesiredAccess & DELETE) {
-					// Needed by FindFirstFile to see if directory is empty or not
-					ShareAccess |= FILE_SHARE_READ;
-				}
+	// When filePath is a directory, needs to change the flag so that the file can
+	// be opened.
+	fileAttr = sFS.GetFileAttributes(FileName);
+
+	if (fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&	!(CreateOptions & FILE_NON_DIRECTORY_FILE))
+	{
+		DokanFileInfo->IsDirectory = TRUE;
+		if (DesiredAccess & DELETE)
+		{
+			// Needed by FindFirstFile to see if directory is empty or not
+			ShareAccess |= FILE_SHARE_READ;
 		}
+	}
 
-		DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
+	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
-		MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
-		MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
+	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
 
-		if (creationDisposition == CREATE_NEW) {
-			DbgPrint(L"\tCREATE_NEW\n");
-		} else if (creationDisposition == OPEN_ALWAYS) {
-			DbgPrint(L"\tOPEN_ALWAYS\n");
-		} else if (creationDisposition == CREATE_ALWAYS) {
-			DbgPrint(L"\tCREATE_ALWAYS\n");
-		} else if (creationDisposition == OPEN_EXISTING) {
-			DbgPrint(L"\tOPEN_EXISTING\n");
-		} else if (creationDisposition == TRUNCATE_EXISTING) {
-			DbgPrint(L"\tTRUNCATE_EXISTING\n");
-		} else {
-			DbgPrint(L"\tUNKNOWN creationDisposition!\n");
+
+	if (DokanFileInfo->IsDirectory)
+	{
+		// It is a create directory request
+		if (creationDisposition == CREATE_NEW)
+		{
+			if (!sFS.CreateDirectory(FileName/*, &securityAttrib*/))
+			{
+				error = GetLastError();
+				DbgPrint(L"\terror code = %d\n\n", error);
+				status = DokanNtStatusFromWin32(error);
+			}
 		}
+		else if (creationDisposition == OPEN_ALWAYS)
+		{
+			if (!sFS.CreateDirectory(FileName/*, &securityAttrib*/))
+			{
+				error = GetLastError();
 
-		if (DokanFileInfo->IsDirectory) {
-			// It is a create directory request
-			if (creationDisposition == CREATE_NEW) {
-				if (!sFS.CreateDirectory(FileName/*, &securityAttrib*/)) {
-					error = GetLastError();
+				if (error != ERROR_ALREADY_EXISTS)
+				{
 					DbgPrint(L"\terror code = %d\n\n", error);
 					status = DokanNtStatusFromWin32(error);
 				}
-			} else if (creationDisposition == OPEN_ALWAYS) {
-
-				if (!sFS.CreateDirectory(FileName/*, &securityAttrib*/)) {
-
-					error = GetLastError();
-
-					if (error != ERROR_ALREADY_EXISTS) {
-						DbgPrint(L"\terror code = %d\n\n", error);
-						status = DokanNtStatusFromWin32(error);
-					}
-				}
 			}
-			if (status == STATUS_SUCCESS) {
-				// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-				handle = sFS.FileOpen(
-					FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
-					fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
+		}
+		if (status == STATUS_SUCCESS)
+		{
+			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
+			handle = sFS.FileOpen(FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
+				fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
 
-				if (!handle || handle == INVALID_HANDLE_VALUE) {
-					error = GetLastError();
-					DbgPrint(L"\terror code = %d\n\n", error);
-
-					status = DokanNtStatusFromWin32(error);
-				} else {
-					DokanFileInfo->Context =
-						(ULONG64)handle; // save the file handle in Context
-				}
-			}
-		} else {
-			// It is a create file request
-
-			if (fileAttr != INVALID_FILE_ATTRIBUTES &&
-				(fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&
-				CreateDisposition == FILE_CREATE)
-				return STATUS_OBJECT_NAME_COLLISION; // File already exist because
-			// GetFileAttributes found it
-			handle = sFS.FileOpen(
-				FileName,
-				DesiredAccess,
-				ShareAccess,
-				&securityAttrib,
-				creationDisposition,
-				fileAttributesAndFlags);
-
-			if (!handle || handle == INVALID_HANDLE_VALUE) {
+			if (!handle || handle == INVALID_HANDLE_VALUE)
+			{
 				error = GetLastError();
 				DbgPrint(L"\terror code = %d\n\n", error);
 
 				status = DokanNtStatusFromWin32(error);
-			} else {
-				DokanFileInfo->Context =
-					(ULONG64)handle; // save the file handle in Context
+			}
+			else
+			{
+				DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+			}
+		}
+	}
+	else
+	{
+		// It is a create file request
+		if (fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY) && CreateDisposition == FILE_CREATE)
+		{
+			return STATUS_OBJECT_NAME_COLLISION; // File already exist because GetFileAttributes found it
+		}
 
-				if (creationDisposition == OPEN_ALWAYS ||
-					creationDisposition == CREATE_ALWAYS) {
-						error = GetLastError();
-						if (error == ERROR_ALREADY_EXISTS) {
-							DbgPrint(L"\tOpen an already existing file\n");
-							// Open succeed but we need to inform the driver
-							// that the file open and not created by returning STATUS_OBJECT_NAME_COLLISION
-							return STATUS_OBJECT_NAME_COLLISION;
-						}
+		handle = sFS.FileOpen(FileName,	DesiredAccess, ShareAccess, &securityAttrib, creationDisposition, fileAttributesAndFlags);
+
+		if (!handle || handle == INVALID_HANDLE_VALUE)
+		{
+			error = GetLastError();
+			DbgPrint(L"\terror code = %d\n\n", error);
+
+			status = DokanNtStatusFromWin32(error);
+		}
+		else
+		{
+			DokanFileInfo->Context = (ULONG64)handle; // save the file handle in Context
+
+			if (creationDisposition == OPEN_ALWAYS || creationDisposition == CREATE_ALWAYS)
+			{
+				error = GetLastError();
+				if (error == ERROR_ALREADY_EXISTS)
+				{
+					DbgPrint(L"\tOpen an already existing file\n");
+					// Open succeed but we need to inform the driver
+					// that the file open and not created by returning STATUS_OBJECT_NAME_COLLISION
+					return STATUS_OBJECT_NAME_COLLISION;
 				}
 			}
 		}
+	}
 
-		DbgPrint(L"\n");
-		return status;
+	DbgPrint(L"\n");
+	return status;
 }
 
 #pragma warning(push)
@@ -390,12 +387,15 @@ static void DOKAN_CALLBACK
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
 	SetLastError(ERROR_SUCCESS);
-	if (DokanFileInfo->Context) {
+	if (DokanFileInfo->Context)
+	{
 		DbgPrint(L"CloseFile: %s\n", FileName);
 		DbgPrint(L"\terror : not cleanuped file\n\n");
 		sFS.CloseFile((EleFSLib::EleFS::File*)DokanFileInfo->Context);
 		DokanFileInfo->Context = 0;
-	} else {
+	}
+	else
+	{
 		//DbgPrint(L"Close: %s\n\tinvalid handle\n\n", FileName);
 		DbgPrint(L"Close: %s\n\n", FileName);
 		return;
@@ -411,32 +411,45 @@ static void DOKAN_CALLBACK
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
-	if (DokanFileInfo->Context) {
+	if (DokanFileInfo->Context)
+	{
 		DbgPrint(L"Cleanup: %s\n\n", FileName);
 		sFS.CloseFile((EleFSLib::EleFS::File*)DokanFileInfo->Context);
 		DokanFileInfo->Context = 0;
-	} else {
+	}
+	else
+	{
 		DbgPrint(L"Cleanup: %s\n\tinvalid handle\n\n", FileName);
 		return;
 	}
 
 
-	if (DokanFileInfo->DeleteOnClose) {
+	if (DokanFileInfo->DeleteOnClose)
+	{
 		// Should already be deleted by CloseHandle
 		// if open with FILE_FLAG_DELETE_ON_CLOSE
 		DbgPrint(L"\tDeleteOnClose\n");
-		if (DokanFileInfo->IsDirectory) {
+		if (DokanFileInfo->IsDirectory)
+		{
 			DbgPrint(L"  DeleteDirectory ");
-			if (!sFS.DeleteFile(FileName)) {
+			if (!sFS.DeleteFile(FileName))
+			{
 				DbgPrint(L"error code = %d\n\n", GetLastError());
-			} else {
+			}
+			else
+			{
 				DbgPrint(L"success\n\n");
 			}
-		} else {
+		}
+		else
+		{
 			DbgPrint(L"  DeleteFile ");
-			if (sFS.DeleteFile(FileName) == 0) {
+			if (sFS.DeleteFile(FileName) == 0)
+			{
 				DbgPrint(L" error code = %d\n\n", GetLastError());
-			} else {
+			}
+			else
+			{
 				DbgPrint(L"success\n\n");
 			}
 		}
@@ -1189,8 +1202,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 		if ((NULL == SecurityDescriptor) || (BufferLength < myDescLength))
 		{
 			LocalFree(myDesc);
-			return STATUS_BUFFER_OVERFLOW;
-			//			return ERROR_INSUFFICIENT_BUFFER;
+			//			return STATUS_BUFFER_OVERFLOW;
+			return ERROR_INSUFFICIENT_BUFFER;
 		}
 
 #if 1
@@ -1641,8 +1654,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->SetAllocationSize = MirrorSetAllocationSize;
 	dokanOperations->LockFile = MirrorLockFile;
 	dokanOperations->UnlockFile = MirrorUnlockFile;
-	dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
-	//	dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
+	//dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
+	//dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
 	dokanOperations->SetFileSecurity = NULL;
 	dokanOperations->GetDiskFreeSpace = MirrorGetDiskFreeSpace;
 	dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
