@@ -328,7 +328,7 @@ static NTSTATUS DOKAN_CALLBACK
 					FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
 					fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
 
-				if (handle == INVALID_HANDLE_VALUE) {
+				if (!handle || handle == INVALID_HANDLE_VALUE) {
 					error = GetLastError();
 					DbgPrint(L"\terror code = %d\n\n", error);
 
@@ -354,7 +354,7 @@ static NTSTATUS DOKAN_CALLBACK
 				creationDisposition,
 				fileAttributesAndFlags);
 
-			if (handle == INVALID_HANDLE_VALUE) {
+			if (!handle || handle == INVALID_HANDLE_VALUE) {
 				error = GetLastError();
 				DbgPrint(L"\terror code = %d\n\n", error);
 
@@ -474,63 +474,71 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 											  DWORD BufferLength,
 											  LPDWORD ReadLength,
 											  LONGLONG Offset,
-											  PDOKAN_FILE_INFO DokanFileInfo) {
+											  PDOKAN_FILE_INFO DokanFileInfo)
+{
 
-												  AutoCloseFile closer;
-												  EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
+	AutoCloseFile closer;
+	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
-												  ULONG offset = (ULONG)Offset;
-												  BOOL opened = FALSE;
+	ULONG offset = (ULONG)Offset;
+	BOOL opened = FALSE;
 
-												  DbgPrint(L"ReadFile : %s\n", FileName);
+	DbgPrint(L"ReadFile : %s\n", FileName);
 
-												  if (!handle || handle == INVALID_HANDLE_VALUE) {
-													  DbgPrint(L"\tinvalid handle, cleanuped?\n");
-													  handle = sFS.FileOpen(FileName, GENERIC_READ, FILE_SHARE_READ, NULL,
-														  OPEN_EXISTING, 0);
-													  if (handle == INVALID_HANDLE_VALUE) {
-														  DWORD error = GetLastError();
-														  DbgPrint(L"\tCreateFile error : %d\n\n", error);
-														  return DokanNtStatusFromWin32(error);
-													  }
-													  opened = TRUE;
-												  }
+	if (!handle || handle == INVALID_HANDLE_VALUE)
+	{
+		DbgPrint(L"\tinvalid handle, cleanuped?\n");
+		handle = sFS.FileOpen(FileName, GENERIC_READ, FILE_SHARE_READ, NULL,OPEN_EXISTING, 0);
+		if (!handle || handle == INVALID_HANDLE_VALUE)
+		{
+			DWORD error = GetLastError();
+			DbgPrint(L"\tCreateFile error : %d\n\n", error);
+			return DokanNtStatusFromWin32(error);
+		}
+		opened = TRUE;
+	}
 
-												  if (ReadLength)
-												  {
-													  *ReadLength = 0;
-												  }
+	handle->mFilePointer = Offset;
 
-												  DWORD readThisPass = 0;
-												  while (BufferLength)
-												  {
-													  DWORD toReadThisPass = min(0x10000,BufferLength);
-													  if (!sFS.ReadFile(handle, Buffer, toReadThisPass, &readThisPass)) {
-														  DWORD error = GetLastError();
-														  DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n",
-															  error, BufferLength, *ReadLength);
-														  return DokanNtStatusFromWin32(error);
+	if (ReadLength)
+	{
+		*ReadLength = 0;
+	}
 
-													  } else {
-														  DbgPrint(L"\tread %d, offset %d\n\n", *ReadLength, Offset);
-													  }
-													  BufferLength -= toReadThisPass;
-													  Buffer = ((char*)Buffer) + toReadThisPass;
-													  if (ReadLength)
-													  {
-														  *ReadLength += readThisPass;
-													  }
+	DWORD readThisPass = 0;
+	while (BufferLength)
+	{
+		DWORD toReadThisPass = min(0x10000,BufferLength);
+		if (!sFS.ReadFile(handle, Buffer, toReadThisPass, &readThisPass))
+		{
+			DWORD error = GetLastError();
+			DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n",error, BufferLength, *ReadLength);
+			return DokanNtStatusFromWin32(error);
 
-													  if (toReadThisPass != readThisPass)
-													  {
-														  break;
-													  }
-												  }
+		}
+		else
+		{
+			DbgPrint(L"\tread %d, offset %d\n\n", *ReadLength, Offset);
+		}
+		BufferLength -= toReadThisPass;
+		Buffer = ((char*)Buffer) + toReadThisPass;
+		if (ReadLength)
+		{
+			*ReadLength += readThisPass;
+		}
 
-												  if (opened)
-													  sFS.CloseFile(handle);
+		if (toReadThisPass != readThisPass)
+		{
+			break;
+		}
+	}
 
-												  return STATUS_SUCCESS;
+	if (opened)
+	{
+		sFS.CloseFile(handle);
+	}
+
+	return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -568,14 +576,17 @@ static NTSTATUS DOKAN_CALLBACK
 	while (NumberOfBytesToWrite)
 	{
 		DWORD toWriteThisPass = min(0x10000,NumberOfBytesToWrite);
-		if (!sFS.WriteFile(handle, Buffer, toWriteThisPass, &writtenThisPass)) {
-			DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
-				GetLastError(), NumberOfBytesToWrite, *NumberOfBytesWritten);
+		if (!sFS.WriteFile(handle, Buffer, toWriteThisPass, &writtenThisPass))
+		{
+			DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n", GetLastError(), NumberOfBytesToWrite, *NumberOfBytesWritten);
 			return DokanNtStatusFromWin32(ERROR_INVALID_FUNCTION);
 
-		} else {
+		}
+		else
+		{
 			DbgPrint(L"\twrite %d, offset %d\n\n", *NumberOfBytesWritten, Offset);
 		}
+
 		NumberOfBytesToWrite -= toWriteThisPass;
 		Buffer = ((char*)Buffer) + toWriteThisPass;
 		if (NumberOfBytesWritten)
@@ -639,13 +650,16 @@ static NTSTATUS DOKAN_CALLBACK
 				  dwFileAttributes=%x\n\
 				  ftCreationTime=%x\n\
 				  ftLastAccessTime=%x\n\
-				  ftLastWriteTime=%x\n\
-				  nFileSizeHigh=%x\n\
-				  nFileSizeLow=%x\n",
+				  ftLastWriteTime=%x\n",
 				  HandleFileInformation->dwFileAttributes,
 				  HandleFileInformation->ftCreationTime,
 				  HandleFileInformation->ftLastAccessTime,
-				  HandleFileInformation->ftLastWriteTime,
+				  HandleFileInformation->ftLastWriteTime
+				  );
+
+		DbgPrint(L"\
+				  nFileSizeHigh=%x\n\
+				  nFileSizeLow=%x\n",
 				  HandleFileInformation->nFileSizeHigh,
 				  HandleFileInformation->nFileSizeLow
 				  );
@@ -1109,7 +1123,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 #endif
 
 	BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
-#if 1
+#if 0
 
 	//		if (DokanFileInfo->IsDirectory)
 	if (rootFolder)
@@ -1156,15 +1170,13 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 	return STATUS_NOT_IMPLEMENTED;
 #endif
 
-#if 0
-	//		if (DokanFileInfo->IsDirectory)
+#if 1
+	if (DokanFileInfo->IsDirectory)
 	{
 		PSECURITY_DESCRIPTOR myDesc;
 		ULONG myDescLength;
 		// SDDL used by dokan driver
-		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-			L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)",
-			SDDL_REVISION_1, &myDesc, &myDescLength))
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)",SDDL_REVISION_1, &myDesc, &myDescLength))
 		{
 			return STATUS_NOT_IMPLEMENTED;
 		}
@@ -1177,37 +1189,63 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 		if ((NULL == SecurityDescriptor) || (BufferLength < myDescLength))
 		{
 			LocalFree(myDesc);
-			return /*STATUS_BUFFER_OVERFLOW*/ERROR_INSUFFICIENT_BUFFER;
+			return STATUS_BUFFER_OVERFLOW;
+			//			return ERROR_INSUFFICIENT_BUFFER;
 		}
 
+#if 1
+		LPTSTR pStringBuffer = NULL;
+		if (!ConvertSecurityDescriptorToStringSecurityDescriptor(myDesc, SDDL_REVISION_1, *SecurityInformation,&pStringBuffer, NULL))
+		{
+			LocalFree(myDesc);
+			return STATUS_NOT_IMPLEMENTED;
+		}
+		LocalFree(myDesc);
+
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(pStringBuffer, SDDL_REVISION_1, &myDesc, &myDescLength))
+		{
+			return STATUS_NOT_IMPLEMENTED;
+		}
+
+		LocalFree(pStringBuffer);
+#endif
 		CopyMemory(SecurityDescriptor , myDesc , myDescLength);
 
 		LocalFree(myDesc);
-		return STATUS_SUCCESS;
-		/*
-		LPTSTR pStringBuffer = NULL;
-		if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
-		SecurityDescriptor, SDDL_REVISION_1, *SecurityInformation,
-		&pStringBuffer, NULL)) {
-		return STATUS_NOT_IMPLEMENTED;
-		}
-
-		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
-		pStringBuffer, SDDL_REVISION_1, &SecurityDescriptor,
-		&BufferLength)) {
-		return STATUS_NOT_IMPLEMENTED;
-		}
-
-		if (pStringBuffer != NULL)
-		LocalFree(pStringBuffer);
-		*/
-
 		return STATUS_SUCCESS;
 	}
 
 	return STATUS_NOT_IMPLEMENTED;
 #endif
 
+
+#if 1
+	if (DokanFileInfo->IsDirectory)
+	{
+		// SDDL used by dokan driver
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(L"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGX;;;RC)",SDDL_REVISION_1, &SecurityDescriptor, &BufferLength))
+		{
+			return STATUS_NOT_IMPLEMENTED;
+		}
+
+		LPTSTR pStringBuffer = NULL;
+		if (!ConvertSecurityDescriptorToStringSecurityDescriptor(SecurityDescriptor, SDDL_REVISION_1, *SecurityInformation,&pStringBuffer, NULL))
+		{
+			return STATUS_NOT_IMPLEMENTED;
+		}
+
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(pStringBuffer, SDDL_REVISION_1, &SecurityDescriptor,&BufferLength))
+		{
+			return STATUS_NOT_IMPLEMENTED;
+		}
+
+		if (pStringBuffer != NULL)
+			LocalFree(pStringBuffer);
+
+		return STATUS_SUCCESS;
+	}
+	return STATUS_NOT_IMPLEMENTED;
+#endif
 
 #if 0
 	if (!handle || handle == INVALID_HANDLE_VALUE)
@@ -1278,8 +1316,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
 		*VolumeSerialNumber = 0x19831116;
 		*MaximumComponentLength = 256;
 		*FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
-			FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK/* |
-															   FILE_PERSISTENT_ACLS*/; // MPi: TODO: Add FILE_PERSISTENT_ACLS support
+			FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK /*| FILE_PERSISTENT_ACLS*/; // MPi: TODO: Add FILE_PERSISTENT_ACLS support
 
 		// File system name could be anything up to 10 characters.
 		// But Windows check few feature availability based on file system name.
@@ -1605,7 +1642,8 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 	dokanOperations->LockFile = MirrorLockFile;
 	dokanOperations->UnlockFile = MirrorUnlockFile;
 	dokanOperations->GetFileSecurity = MirrorGetFileSecurity;
-	dokanOperations->SetFileSecurity = NULL;//MirrorSetFileSecurity;
+	//	dokanOperations->SetFileSecurity = MirrorSetFileSecurity;
+	dokanOperations->SetFileSecurity = NULL;
 	dokanOperations->GetDiskFreeSpace = MirrorGetDiskFreeSpace;
 	dokanOperations->GetVolumeInformation = MirrorGetVolumeInformation;
 	dokanOperations->Unmounted = MirrorUnmounted;

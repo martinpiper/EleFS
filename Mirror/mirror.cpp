@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <winbase.h>
+#include <sddl.h>
 
 #pragma comment( lib, "Dokan\\Win32\\Debug\\dokan1.lib" )
 
@@ -440,164 +441,171 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 											  DWORD BufferLength,
 											  LPDWORD ReadLength,
 											  LONGLONG Offset,
-											  PDOKAN_FILE_INFO DokanFileInfo) {
-												  WCHAR filePath[MAX_PATH];
-												  HANDLE handle = (HANDLE)DokanFileInfo->Context;
-												  ULONG offset = (ULONG)Offset;
-												  BOOL opened = FALSE;
+											  PDOKAN_FILE_INFO DokanFileInfo)
+{
+	WCHAR filePath[MAX_PATH];
+	HANDLE handle = (HANDLE)DokanFileInfo->Context;
+	ULONG offset = (ULONG)Offset;
+	BOOL opened = FALSE;
 
-												  GetFilePath(filePath, MAX_PATH, FileName);
+	GetFilePath(filePath, MAX_PATH, FileName);
 
-												  DbgPrint(L"ReadFile : %s\n", filePath);
+	DbgPrint(L"ReadFile : %s\n", filePath);
 
-												  if (!handle || handle == INVALID_HANDLE_VALUE) {
-													  DbgPrint(L"\tinvalid handle, cleanuped?\n");
-													  handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,
-														  OPEN_EXISTING, 0, NULL);
-													  if (handle == INVALID_HANDLE_VALUE) {
-														  DWORD error = GetLastError();
-														  DbgPrint(L"\tCreateFile error : %d\n\n", error);
-														  return DokanNtStatusFromWin32(error);
-													  }
-													  opened = TRUE;
-												  }
+	if (!handle || handle == INVALID_HANDLE_VALUE)
+	{
+		DbgPrint(L"\tinvalid handle, cleanuped?\n");
+		handle = CreateFile(filePath, GENERIC_READ, FILE_SHARE_READ, NULL,OPEN_EXISTING, 0, NULL);
+		if (handle == INVALID_HANDLE_VALUE)
+		{
+			DWORD error = GetLastError();
+			DbgPrint(L"\tCreateFile error : %d\n\n", error);
+			return DokanNtStatusFromWin32(error);
+		}
+		opened = TRUE;
+	}
 
-												  LARGE_INTEGER distanceToMove;
-												  distanceToMove.QuadPart = Offset;
-												  if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-													  DWORD error = GetLastError();
-													  DbgPrint(L"\tseek error, offset = %d\n\n", offset);
-													  if (opened)
-														  CloseHandle(handle);
-													  return DokanNtStatusFromWin32(error);
-												  }
+	LARGE_INTEGER distanceToMove;
+	distanceToMove.QuadPart = Offset;
+	if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN))
+	{
+		DWORD error = GetLastError();
+		DbgPrint(L"\tseek error, offset = %d\n\n", offset);
+		if (opened)
+			CloseHandle(handle);
+		return DokanNtStatusFromWin32(error);
+	}
 
-												  if (!ReadFile(handle, Buffer, BufferLength, ReadLength, NULL)) {
-													  DWORD error = GetLastError();
-													  DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n\n",
-														  error, BufferLength, *ReadLength);
-													  if (opened)
-														  CloseHandle(handle);
-													  return DokanNtStatusFromWin32(error);
+	if (!ReadFile(handle, Buffer, BufferLength, ReadLength, NULL))
+	{
+		DWORD error = GetLastError();
+		DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n\n",
+			error, BufferLength, *ReadLength);
+		if (opened)
+			CloseHandle(handle);
+		return DokanNtStatusFromWin32(error);
 
-												  } else {
-													  DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,
-														  *ReadLength, offset);
-												  }
+	}
+	else
+	{
+		DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,*ReadLength, offset);
+	}
 
-												  if (opened)
-													  CloseHandle(handle);
+	if (opened)
+		CloseHandle(handle);
 
-												  return STATUS_SUCCESS;
+	return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 											   DWORD NumberOfBytesToWrite,
 											   LPDWORD NumberOfBytesWritten,
 											   LONGLONG Offset,
-											   PDOKAN_FILE_INFO DokanFileInfo) {
-												   WCHAR filePath[MAX_PATH];
-												   HANDLE handle = (HANDLE)DokanFileInfo->Context;
-												   BOOL opened = FALSE;
+											   PDOKAN_FILE_INFO DokanFileInfo)
+{
+	WCHAR filePath[MAX_PATH];
+	HANDLE handle = (HANDLE)DokanFileInfo->Context;
+	BOOL opened = FALSE;
 
-												   GetFilePath(filePath, MAX_PATH, FileName);
+	GetFilePath(filePath, MAX_PATH, FileName);
 
-												   DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, Offset,
-													   NumberOfBytesToWrite);
+	DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, Offset, NumberOfBytesToWrite);
 
-												   // reopen the file
-												   if (!handle || handle == INVALID_HANDLE_VALUE) {
-													   DbgPrint(L"\tinvalid handle, cleanuped?\n");
-													   handle = CreateFile(filePath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
-														   OPEN_EXISTING, 0, NULL);
-													   if (handle == INVALID_HANDLE_VALUE) {
-														   DWORD error = GetLastError();
-														   DbgPrint(L"\tCreateFile error : %d\n\n", error);
-														   return DokanNtStatusFromWin32(error);
-													   }
-													   opened = TRUE;
-												   }
+	// reopen the file
+	if (!handle || handle == INVALID_HANDLE_VALUE)
+	{
+		DbgPrint(L"\tinvalid handle, cleanuped?\n");
+		handle = CreateFile(filePath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+		if (handle == INVALID_HANDLE_VALUE)
+		{
+			DWORD error = GetLastError();
+			DbgPrint(L"\tCreateFile error : %d\n\n", error);
+			return DokanNtStatusFromWin32(error);
+		}
+		opened = TRUE;
+	}
 
-												   UINT64 fileSize = 0;
-												   DWORD fileSizeLow = 0;
-												   DWORD fileSizeHigh = 0;
-												   fileSizeLow = GetFileSize(handle, &fileSizeHigh);
-												   if (fileSizeLow == INVALID_FILE_SIZE) {
-													   DWORD error = GetLastError();
-													   DbgPrint(L"\tcan not get a file size error = %d\n", error);
-													   if (opened)
-														   CloseHandle(handle);
-													   return DokanNtStatusFromWin32(error);
-												   }
+	UINT64 fileSize = 0;
+	DWORD fileSizeLow = 0;
+	DWORD fileSizeHigh = 0;
+	fileSizeLow = GetFileSize(handle, &fileSizeHigh);
+	if (fileSizeLow == INVALID_FILE_SIZE)
+	{
+		DWORD error = GetLastError();
+		DbgPrint(L"\tcan not get a file size error = %d\n", error);
+		if (opened)
+			CloseHandle(handle);
+		return DokanNtStatusFromWin32(error);
+	}
 
-												   fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
+	fileSize = ((UINT64)fileSizeHigh << 32) | fileSizeLow;
 
-												   LARGE_INTEGER distanceToMove;
-												   if (DokanFileInfo->WriteToEndOfFile) {
-													   LARGE_INTEGER z;
-													   z.QuadPart = 0;
-													   if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
-														   DWORD error = GetLastError();
-														   DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
-														   if (opened)
-															   CloseHandle(handle);
-														   return DokanNtStatusFromWin32(error);
-													   }
-												   } else {
-													   // Paging IO cannot write after allocate file size.
-													   if (DokanFileInfo->PagingIo) {
-														   if ((UINT64)Offset >= fileSize) {
-															   *NumberOfBytesWritten = 0;
-															   if (opened)
-																   CloseHandle(handle);
-															   return STATUS_SUCCESS;
-														   }
+	LARGE_INTEGER distanceToMove;
+	if (DokanFileInfo->WriteToEndOfFile) {
+		LARGE_INTEGER z;
+		z.QuadPart = 0;
+		if (!SetFilePointerEx(handle, z, NULL, FILE_END)) {
+			DWORD error = GetLastError();
+			DbgPrint(L"\tseek error, offset = EOF, error = %d\n", error);
+			if (opened)
+				CloseHandle(handle);
+			return DokanNtStatusFromWin32(error);
+		}
+	} else {
+		// Paging IO cannot write after allocate file size.
+		if (DokanFileInfo->PagingIo) {
+			if ((UINT64)Offset >= fileSize) {
+				*NumberOfBytesWritten = 0;
+				if (opened)
+					CloseHandle(handle);
+				return STATUS_SUCCESS;
+			}
 
-														   if (((UINT64)Offset + NumberOfBytesToWrite) > fileSize) {
-															   UINT64 bytes = fileSize - Offset;
-															   if (bytes >> 32) {
-																   NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
-															   } else {
-																   NumberOfBytesToWrite = (DWORD)bytes;
-															   }
-														   }
-													   }
+			if (((UINT64)Offset + NumberOfBytesToWrite) > fileSize) {
+				UINT64 bytes = fileSize - Offset;
+				if (bytes >> 32) {
+					NumberOfBytesToWrite = (DWORD)(bytes & 0xFFFFFFFFUL);
+				} else {
+					NumberOfBytesToWrite = (DWORD)bytes;
+				}
+			}
+		}
 
-													   if ((UINT64)Offset > fileSize) {
-														   // In the mirror sample helperZeroFileData is not necessary. NTFS will
-														   // zero a hole.
-														   // But if user's file system is different from NTFS( or other Windows's
-														   // file systems ) then  users will have to zero the hole themselves.
-													   }
+		if ((UINT64)Offset > fileSize) {
+			// In the mirror sample helperZeroFileData is not necessary. NTFS will
+			// zero a hole.
+			// But if user's file system is different from NTFS( or other Windows's
+			// file systems ) then  users will have to zero the hole themselves.
+		}
 
-													   distanceToMove.QuadPart = Offset;
-													   if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
-														   DWORD error = GetLastError();
-														   DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
-														   if (opened)
-															   CloseHandle(handle);
-														   return DokanNtStatusFromWin32(error);
-													   }
-												   }
+		distanceToMove.QuadPart = Offset;
+		if (!SetFilePointerEx(handle, distanceToMove, NULL, FILE_BEGIN)) {
+			DWORD error = GetLastError();
+			DbgPrint(L"\tseek error, offset = %I64d, error = %d\n", Offset, error);
+			if (opened)
+				CloseHandle(handle);
+			return DokanNtStatusFromWin32(error);
+		}
+	}
 
-												   if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten,
-													   NULL)) {
-														   DWORD error = GetLastError();
-														   DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
-															   error, NumberOfBytesToWrite, *NumberOfBytesWritten);
-														   if (opened)
-															   CloseHandle(handle);
-														   return DokanNtStatusFromWin32(error);
+	if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten,
+		NULL)) {
+			DWORD error = GetLastError();
+			DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
+				error, NumberOfBytesToWrite, *NumberOfBytesWritten);
+			if (opened)
+				CloseHandle(handle);
+			return DokanNtStatusFromWin32(error);
 
-												   } else {
-													   DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
-												   }
+	} else {
+		DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
+	}
 
-												   // close the file when it is reopened
-												   if (opened)
-													   CloseHandle(handle);
+	// close the file when it is reopened
+	if (opened)
+		CloseHandle(handle);
 
-												   return STATUS_SUCCESS;
+	return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -1118,6 +1126,27 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 					return DokanNtStatusFromWin32(error);
 				}
 		}
+
+#if 1
+		LPTSTR pStringBuffer = NULL;
+		if (!ConvertSecurityDescriptorToStringSecurityDescriptor(
+			SecurityDescriptor, SDDL_REVISION_1, *SecurityInformation,
+			&pStringBuffer, NULL)) {
+				return STATUS_NOT_IMPLEMENTED;
+		}
+
+		DbgPrint(L"SDDL1: %s\n" , pStringBuffer);
+
+		if (!ConvertStringSecurityDescriptorToSecurityDescriptor(
+			pStringBuffer, SDDL_REVISION_1, &SecurityDescriptor,
+			&BufferLength)) {
+				return STATUS_NOT_IMPLEMENTED;
+		}
+
+		if (pStringBuffer != NULL)
+			LocalFree(pStringBuffer);
+#endif
+
 		CloseHandle(handle);
 
 		return STATUS_SUCCESS;
@@ -1161,8 +1190,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
 		*VolumeSerialNumber = 0x19831116;
 		*MaximumComponentLength = 256;
 		*FileSystemFlags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES |
-			FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK/* |
-															   FILE_PERSISTENT_ACLS*/;
+			FILE_SUPPORTS_REMOTE_STORAGE | FILE_UNICODE_ON_DISK | FILE_PERSISTENT_ACLS;
 
 		// File system name could be anything up to 10 characters.
 		// But Windows check few feature availability based on file system name.
