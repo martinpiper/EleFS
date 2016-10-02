@@ -21,9 +21,15 @@
     <ClCompile Include="BlobFile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FileCrypto.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Inc\BlobFile.h">
+      <Filter>Header Files\Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="Inc\FileCrypto.h">
       <Filter>Header Files\Inc</Filter>
     </ClInclude>
   </ItemGroup>

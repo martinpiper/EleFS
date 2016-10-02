@@ -1,8 +1,10 @@
-#ifndef _BLOBFILE_H_
-#define _BLOBFILE_H_
+#ifndef _BLOBFILELIB_BLOBFILE_H_
+#define _BLOBFILELIB_BLOBFILE_H_
 
 #include <windows.h>
 #include <string>
+
+#include "BlobFileLib/Inc/FileCrypto.h"
 
 namespace BlobFileLib
 {
@@ -84,8 +86,10 @@ namespace BlobFileLib
 		HANDLE mLockedHandle;
 
 		Header mHeader;
+
+		FileCrypto mCrypto;
 	}; //< class BlobFile
 
-}; //< namespace EleFSLib
+}; //< namespace BlobFileLib
 
 #endif

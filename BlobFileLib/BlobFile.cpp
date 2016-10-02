@@ -85,7 +85,7 @@ namespace BlobFileLib
 				filePos.QuadPart = mHeader.mFreeBlock;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 				BlockLink blockLink;
-				ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 				LONGLONG availableSize = blockLink.mBlockDataSize - sizeof(BlockLink);
 
@@ -107,7 +107,7 @@ namespace BlobFileLib
 					}
 
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-					WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				}
 				else
 				{
@@ -118,7 +118,7 @@ namespace BlobFileLib
 					blockLink.mBlockDataSize = sizeToAllocate + sizeof(BlockLink);
 
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-					WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 					availableSize -= blockLink.mBlockDataSize;
 
 					// The split position
@@ -128,7 +128,7 @@ namespace BlobFileLib
 					blockLink.mNext = backupNextFree;
 					blockLink.mBlockDataSize = availableSize + sizeof(BlockLink);
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-					WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 					sizeToAllocate = 0;
 				}
@@ -150,10 +150,10 @@ namespace BlobFileLib
 				fileSize.QuadPart = lastBlockUpdated;
 				SetFilePointerEx(mLockedHandle,fileSize,0,FILE_BEGIN);
 				BlockLink oldBlockLink;
-				ReadFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
+				mCrypto.ReadFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
 				oldBlockLink.mNext = endPos.QuadPart;
 				SetFilePointerEx(mLockedHandle,fileSize,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
 			}
 
 			// Then write a new BlockLink at the end of the file
@@ -165,7 +165,7 @@ namespace BlobFileLib
 			}
 			BlockLink blockLink;
 			blockLink.mBlockDataSize = alignedSize + sizeof(BlockLink);
-			WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 			LARGE_INTEGER movement;
 			movement.QuadPart = alignedSize;
@@ -208,7 +208,7 @@ namespace BlobFileLib
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
 			BlockLink blockLink;
-			ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 			if (numBytes < sizeof(BlockLink))
 			{
 				// MPi: TODO: Handle the corrupt block
@@ -226,7 +226,7 @@ namespace BlobFileLib
 				{
 					blockLink.mNext = previousFreeHead;
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-					WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				}
 				info.mNext = blockLink.mNext;
 				blockPos.insert(std::pair<LONGLONG,BlockInfo>(filePos.QuadPart,info));
@@ -247,7 +247,7 @@ namespace BlobFileLib
 
 			BlockLink blockLink;
 			DWORD numBytes;
-			ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 			if (numBytes < sizeof(BlockLink))
 			{
 				// MPi: TODO: Handle the corrupt block
@@ -294,10 +294,10 @@ namespace BlobFileLib
 					filePos.QuadPart = (*found).first;
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 					BlockLink blockLink;
-					ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 					blockLink.mNext = toUpdate.mNext;
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-					WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+					mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				}
 
 				found = blockPos.find(info2.mNext);
@@ -319,11 +319,11 @@ namespace BlobFileLib
 				filePos.QuadPart = (*st).first;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 				BlockLink blockLink;
-				ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				blockLink.mNext = info1.mNext;
 				blockLink.mBlockDataSize = info1.mBlockDataSize;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 				// Remove the merged block from the list
 				blockPos.erase(next);
@@ -360,11 +360,11 @@ namespace BlobFileLib
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
 				BlockLink oldBlockLink;
-				ReadFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
+				mCrypto.ReadFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
 				oldBlockLink.mNext = info.mNext;
 
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&oldBlockLink,sizeof(oldBlockLink),&numBytes,0);
 
 				blockPos.erase(found);
 			}
@@ -399,7 +399,7 @@ namespace BlobFileLib
 			filePos.QuadPart = currentBlockPos;
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
-			ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 			LONGLONG availableSize = blockLink.mBlockDataSize - sizeof(BlockLink);
 			// If there is a next block then adjust the size, eventually giving us the final resultant size of the block we end up on.
@@ -439,7 +439,7 @@ namespace BlobFileLib
 				filePos.QuadPart = currentBlockPos;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 				filePos.QuadPart = currentBlockPos + blockLink.mBlockDataSize;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
@@ -457,7 +457,7 @@ namespace BlobFileLib
 					filePos.QuadPart = mHeader.mFreeBlock;
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 					BlockLink tempLink;
-					ReadFile(mLockedHandle,&tempLink,sizeof(BlockLink),&numBytes,0);
+					mCrypto.ReadFile(mLockedHandle,&tempLink,sizeof(BlockLink),&numBytes,0);
 					if ((toAllocate + kBlockSizeAlign) >= tempLink.mBlockDataSize)
 					{
 						// Use it all
@@ -487,14 +487,14 @@ namespace BlobFileLib
 					filePos.QuadPart = blockLink.mNext;
 					SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 					BlockLink tempLink;
-					ReadFile(mLockedHandle,&tempLink,sizeof(tempLink),&numBytes,0);
+					mCrypto.ReadFile(mLockedHandle,&tempLink,sizeof(tempLink),&numBytes,0);
 					blockLink.mNext = tempLink.mNext;
 					blockLink.mBlockDataSize += tempLink.mBlockDataSize;
 				}
 
 				filePos.QuadPart = currentBlockPos;
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				return true;
 			}
 
@@ -507,7 +507,7 @@ namespace BlobFileLib
 				blockLink.mBlockDataSize = alignedSize + sizeof(BlockLink);
 
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				availableSize -= blockLink.mBlockDataSize;
 
 				// The split position
@@ -515,7 +515,7 @@ namespace BlobFileLib
 				blockLink.mNext = 0;
 				blockLink.mBlockDataSize = availableSize + sizeof(BlockLink);
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				// Finally place this old allocated block onto the free list
 				return InternalFreeBlock(filePos.QuadPart);
 			}
@@ -538,7 +538,7 @@ namespace BlobFileLib
 				blockLink.mBlockDataSize = alignedSize + sizeof(BlockLink);
 
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 				availableSize -= blockLink.mBlockDataSize;
 
 				// The split position
@@ -546,7 +546,7 @@ namespace BlobFileLib
 				blockLink.mNext = backupNextFree;
 				blockLink.mBlockDataSize = availableSize + sizeof(BlockLink);
 				SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-				WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+				mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 				// Finally place these old allocated blocks onto the free list
 				return InternalFreeBlock(filePos.QuadPart);
@@ -558,7 +558,7 @@ namespace BlobFileLib
 			filePos.QuadPart = currentBlockPos;
 			blockLink.mNext = 0;
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-			WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.WriteFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 			// Finally place these old allocated blocks onto the free list
 			return InternalFreeBlock(backupNextFree);
 		}
@@ -594,7 +594,7 @@ namespace BlobFileLib
 			filePos.QuadPart = currentBlockPos;
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
-			if (!ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0))
+			if (!mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0))
 			{
 				return false;
 			}
@@ -615,7 +615,7 @@ namespace BlobFileLib
 			LARGE_INTEGER filePos;
 			filePos.QuadPart = currentBlockPos;
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
-			if (!ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0))
+			if (!mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0))
 			{
 				return false;
 			}
@@ -631,14 +631,14 @@ namespace BlobFileLib
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 			if (read)
 			{
-				if (!ReadFile(mLockedHandle,theData,(DWORD)maxThisBlock,&numBytes,0))
+				if (!mCrypto.ReadFile(mLockedHandle,theData,(DWORD)maxThisBlock,&numBytes,0))
 				{
 					return false;
 				}
 			}
 			else
 			{
-				if (!WriteFile(mLockedHandle,theData,(DWORD)maxThisBlock,&numBytes,0))
+				if (!mCrypto.WriteFile(mLockedHandle,theData,(DWORD)maxThisBlock,&numBytes,0))
 				{
 					return false;
 				}
@@ -688,7 +688,7 @@ namespace BlobFileLib
 			filePos.QuadPart = currentBlockPos;
 			SetFilePointerEx(mLockedHandle,filePos,0,FILE_BEGIN);
 
-			ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
+			mCrypto.ReadFile(mLockedHandle,&blockLink,sizeof(blockLink),&numBytes,0);
 
 			LONGLONG availableSize = blockLink.mBlockDataSize - sizeof(BlockLink);
 			theSize += availableSize;

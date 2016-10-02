@@ -12,9 +12,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BlobFile.cpp" />
+    <ClCompile Include="FileCrypto.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Inc\BlobFile.h" />
+    <ClInclude Include="Inc\FileCrypto.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D51159BF-CDCC-4DC0-850D-BEA7F2BDEFE8}</ProjectGuid>

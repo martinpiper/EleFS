@@ -10,8 +10,8 @@
 
 #pragma comment( lib, "EleFSLib.lib" )
 
-#define testIterations 10000
-//#define testIterations 100
+//#define testIterations 10000
+#define testIterations 100
 
 void PrintFailed(const char *error)
 {

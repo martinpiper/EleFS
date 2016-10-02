@@ -14,7 +14,10 @@
     <None Include="..\README.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="EleFS.cpp" />
+    <ClCompile Include="EleFSMain.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="TODO.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{2EB1E0E9-50A4-499C-8C20-396C67E48EDA}</ProjectGuid>

@@ -1,5 +1,5 @@
-#ifndef _EleFS_H_
-#define _EleFS_H_
+#ifndef _ELEFSLIB_ELEFS_H_
+#define _ELEFSLIB_ELEFS_H_
 
 #include <windows.h>
 #include <string>
