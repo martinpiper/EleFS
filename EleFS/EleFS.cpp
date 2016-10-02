@@ -177,13 +177,10 @@ static NTSTATUS DOKAN_CALLBACK
 	SECURITY_ATTRIBUTES securityAttrib;
 
 	securityAttrib.nLength = sizeof(securityAttrib);
-	securityAttrib.lpSecurityDescriptor =
-		SecurityContext->AccessState.SecurityDescriptor;
+	securityAttrib.lpSecurityDescriptor = SecurityContext->AccessState.SecurityDescriptor;
 	securityAttrib.bInheritHandle = FALSE;
 
-	DokanMapKernelToUserCreateFileFlags(
-		FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
-		&creationDisposition);
+	DokanMapKernelToUserCreateFileFlags(FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags, &creationDisposition);
 
 	DbgPrint(L"CreateFile : %s\n", FileName);
 
@@ -257,11 +254,6 @@ static NTSTATUS DOKAN_CALLBACK
 	if (fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&	!(CreateOptions & FILE_NON_DIRECTORY_FILE))
 	{
 		DokanFileInfo->IsDirectory = TRUE;
-		if (DesiredAccess & DELETE)
-		{
-			// Needed by FindFirstFile to see if directory is empty or not
-			ShareAccess |= FILE_SHARE_READ;
-		}
 	}
 
 	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
@@ -322,8 +314,7 @@ static NTSTATUS DOKAN_CALLBACK
 		if (status == STATUS_SUCCESS)
 		{
 			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-			handle = sFS.FileOpen(FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,
-				fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
+			handle = sFS.FileOpen(FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,	fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
 
 			if (!handle || handle == INVALID_HANDLE_VALUE)
 			{
