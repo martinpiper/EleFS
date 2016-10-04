@@ -11,7 +11,7 @@
 #pragma comment( lib, "EleFSLib.lib" )
 
 //#define testIterations 10000
-#define testIterations 100
+#define testIterations 1000
 
 void PrintFailed(const char *error)
 {
@@ -116,6 +116,93 @@ void CheckExpectedFindFile(EleFSLib::EleFS &fs, LPCWSTR path, std::list<std::wst
 	}
 }
 
+void CheckFileCrypto(void)
+{
+	DeleteFile(L"Test.blob");
+
+	HANDLE theHandle = CreateFileW(L"Test.blob",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,0);
+	if (theHandle == INVALID_HANDLE_VALUE)
+	{
+		PrintFailed("Couldn't open the file");
+	}
+
+	BlobFileLib::FileCrypto *fileCrypto = new BlobFileLib::FileCrypto();
+	fileCrypto->SetEncryptedBlockSize(32);
+	char toCheck[1024];
+	char *someText1 = "0123456789abcdef01234567";
+
+	DWORD endPos;
+	DWORD numWritten = 0;
+	SetFilePointer(theHandle,0,0,FILE_BEGIN);
+	SetEndOfFile(theHandle);
+
+	// Test some easy overlapping writes
+	fileCrypto->WriteFile(theHandle, someText1 , strlen(someText1) , &numWritten , 0);
+	endPos = GetFileSize(theHandle,0);
+	if (strlen(someText1) != endPos)
+	{
+		PrintFailed("Filesize mismatch 1");
+	}
+
+	SetFilePointer(theHandle,20,0,FILE_BEGIN);
+	fileCrypto->WriteFile(theHandle, someText1 , strlen(someText1) , &numWritten , 0);
+	endPos = GetFileSize(theHandle,0);
+	if (strlen(someText1)+20 != endPos)
+	{
+		PrintFailed("Filesize mismatch 2");
+	}
+
+	SetFilePointer(theHandle,40,0,FILE_BEGIN);
+	fileCrypto->WriteFile(theHandle, someText1 , strlen(someText1) , &numWritten , 0);
+	endPos = GetFileSize(theHandle,0);
+	if (strlen(someText1)+40 != endPos)
+	{
+		PrintFailed("Filesize mismatch 3");
+	}
+
+	// Test some easy reads
+	DWORD numRead;
+	SetFilePointer(theHandle,0,0,FILE_BEGIN);
+	fileCrypto->ReadFile(theHandle , toCheck , sizeof(toCheck) , &numRead , 0);
+	CheckFail(numRead == 64);
+	CheckFail(memcmp("0123456789abcdef01230123456789abcdef01230123456789abcdef01234567" , toCheck , 64) == 0);
+
+	SetFilePointer(theHandle,24,0,FILE_BEGIN);
+	fileCrypto->ReadFile(theHandle , toCheck , sizeof(toCheck) , &numRead , 0);
+	CheckFail(numRead == 40);
+	CheckFail(memcmp("456789abcdef01230123456789abcdef01234567" , toCheck , 40) == 0);
+
+	// Test a lot of overlapping writes and reads
+	std::string someText = "";
+	srand(1234);
+	int i;
+	for (i = 0 ; i < sizeof(toCheck) ; i++)
+	{
+		someText += 'a' + (rand() % 26);
+	}
+	SetFilePointer(theHandle,0,0,FILE_BEGIN);
+	fileCrypto->WriteFile(theHandle, someText.c_str() , someText.length() , &numWritten , 0);
+	for (i = 0 ; i < 10000 ; i++)
+	{
+		SetFilePointer(theHandle,0,0,FILE_BEGIN);
+		fileCrypto->ReadFile(theHandle , toCheck , sizeof(toCheck) , &numRead , 0);
+		CheckFail(memcmp(toCheck , someText.c_str() , sizeof(toCheck))==0);
+
+		int startPos = rand() % (sizeof(toCheck) / 2);
+		int len = rand() % (sizeof(toCheck) / 2);
+
+		SetFilePointer(theHandle,startPos,0,FILE_BEGIN);
+		fileCrypto->WriteFile(theHandle, someText.c_str() + startPos , len , &numWritten , 0);
+
+		SetFilePointer(theHandle,0,0,FILE_BEGIN);
+		fileCrypto->ReadFile(theHandle , toCheck , sizeof(toCheck) , &numRead , 0);
+		CheckFail(memcmp(toCheck , someText.c_str() , sizeof(toCheck))==0);
+	}
+
+	delete fileCrypto;
+	CloseHandle(theHandle);
+}
+
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
@@ -130,6 +217,8 @@ int main(int argc, char **argv)
 
 	// Stack context
 	{
+		CheckFileCrypto();
+
 		DeleteFile(L"Test.EleFS");
 
 		HANDLE theHandle = CreateFileW(L"Test.EleFS",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,0);

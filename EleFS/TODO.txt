@@ -1,19 +1,19 @@
+* Will need to add an encryption key from the command line
+
+
+
+
+* If no key on the comand line then FileCrypto can default to a plain text passthrough
+
+
+
+
 * EleFSMain.cpp:MirrorCreateFile()
 	Potential to optimise "fileAttr = sFS.GetFileAttributes(FileName);" and the next "DokanFileInfo->IsDirectory = TRUE" by checking for a simple root folder "\\" (rootFolder = etc) request first
 	Also don't need to do this if the IsDirectory flag is already set.
 	Also the return for "return STATUS_OBJECT_NAME_COLLISION" can be mapped straight through for FILE_CREATE because the return status for "sFS.FileOpen" is ERROR_FILE_EXISTS
 	And Dokan already maps "case ERROR_FILE_EXISTS:                       return STATUS_OBJECT_NAME_COLLISION;" https://github.com/dokan-dev/dokany/blob/master/dokan/ntstatus.i
 	
-
-
-
-* Implement FileCrypto::ReadFile/WriteFile so that it does encryption instead of just passing through data.
-	BlobFile mCrypto
-	Will need to add an encryption key from the command line
-	For small chunk encrypted data access there will need to be a larger encrypt/decrypt operation that inctroduces some overhead.
-	Can potentially cache the result of the larger block while there is a file lock.
-	Might need to pass through file locking operations as well, if the multi-user shared file access functionality is still required.
-
 
 
 

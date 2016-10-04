@@ -24,3 +24,4 @@ bld/
 [Oo]bj/
 [Ll]og/
 *.EleFS
+*.blob

@@ -1,0 +1,5 @@
+* Implement FileCrypto::ReadFile/WriteFile so that it does encryption instead of just passing through data.
+	BlobFile mCrypto
+	For small chunk encrypted data access there will need to be a larger encrypt/decrypt operation that inctroduces some overhead.
+	Can potentially cache the result of the larger block while there is a file lock.
+	Might need to pass through file locking operations as well, if the multi-user shared file access functionality is still required.

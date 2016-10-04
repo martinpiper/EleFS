@@ -24,6 +24,9 @@
     <ClCompile Include="FileCrypto.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\ReplicaNet\ReplicaNetPublic\AmalgamatedReplicaNet.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Inc\BlobFile.h">

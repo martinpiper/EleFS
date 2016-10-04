@@ -17,6 +17,7 @@
     <ClCompile Include="EleFSMain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="Done.txt" />
     <Text Include="TODO.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
