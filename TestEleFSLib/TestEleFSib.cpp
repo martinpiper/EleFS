@@ -29,7 +29,7 @@ void PrintFailed(const char *error)
 void RunTest(int offset)
 {
 	EleFSLib::EleFS fs;
-	CheckFail(fs.Initialise(L"Test2.EleFS"));
+	CheckFail(fs.Initialise(L"Test2.EleFS" , "hello" , 5));
 
 	int i;
 	for (i=0;i<testIterations;i++)
@@ -128,6 +128,7 @@ void CheckFileCrypto(void)
 
 	BlobFileLib::FileCrypto *fileCrypto = new BlobFileLib::FileCrypto();
 	fileCrypto->SetEncryptedBlockSize(32);
+	fileCrypto->SetKeyData("hello" , 5);
 	char toCheck[1024];
 	char *someText1 = "0123456789abcdef01234567";
 
@@ -228,6 +229,7 @@ int main(int argc, char **argv)
 		}
 
 		BlobFileLib::BlobFile blobFile(theHandle);
+		blobFile.SetKeyData("hello" , 5);
 
 		LONGLONG testHandle = 0x123456789abcdef;
 		blobFile.SetApplicationData(testHandle);
@@ -403,7 +405,7 @@ int main(int argc, char **argv)
 
 		DeleteFile(L"Test2.EleFS");
 		EleFSLib::EleFS fs;
-		CheckFail(fs.Initialise(L"Test2.EleFS"));
+		CheckFail(fs.Initialise(L"Test2.EleFS" , "hello" , 5));
 
 		EleFSLib::EleFS::File *file;
 

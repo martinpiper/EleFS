@@ -21,7 +21,7 @@ LARGE_INTEGER MakeLarge(LONGLONG value)
 	return ret;
 }
 
-FileCrypto::FileCrypto() : mTempBuffer(0)
+FileCrypto::FileCrypto() : mTempBuffer(0) , mEncryptedBlockSize(0) , mKeyData(0) , mKeyDataLength(0)
 {
 	SetEncryptedBlockSize();
 }
@@ -39,13 +39,21 @@ void FileCrypto::SetEncryptedBlockSize(const DWORD byteSize)
 	mEncryptedBlockSize = byteSize;
 }
 
+void FileCrypto::SetKeyData(const void *keyData , const size_t keyDataLength)
+{
+	mKeyData = keyData;
+	mKeyDataLength = keyDataLength;
+}
+
 static const int extraTwist = 0xf7139b7;
 
 BOOL FileCrypto::ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
 {
-#if 0
-	return ::ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, 0);
-#else
+	if (!mEncryptedBlockSize || !mKeyData || !mKeyDataLength)
+	{
+		return ::ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, 0);
+	}
+
 	if (!mTempBuffer)
 	{
 		mTempBuffer = (char *) calloc(1 , mEncryptedBlockSize);
@@ -76,7 +84,7 @@ BOOL FileCrypto::ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToR
 		totalRead += bytesRead - insideBlockOffset;
 
 		RNReplicaNet::Encryption::Key key;
-		key.Create(0,0);
+		key.Create(mKeyData,mKeyDataLength);
 		key.AddCrypto(&roundedPos2 , sizeof(roundedPos2));
 
 		// Decrypt the data found the block
@@ -101,14 +109,15 @@ BOOL FileCrypto::ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToR
 	}
 
 	return TRUE;
-#endif
 }
 
 BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
 {
-#if 0
-	return ::WriteFile(hFile , lpBuffer , nNumberOfBytesToWrite , lpNumberOfBytesWritten , 0);
-#else
+	if (!mEncryptedBlockSize || !mKeyData || !mKeyDataLength)
+	{
+		return ::WriteFile(hFile , lpBuffer , nNumberOfBytesToWrite , lpNumberOfBytesWritten , 0);
+	}
+
 	if (!mTempBuffer)
 	{
 		mTempBuffer = (char *) calloc(1 , mEncryptedBlockSize);
@@ -133,7 +142,7 @@ BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesT
 		}
 
 		RNReplicaNet::Encryption::Key key;
-		key.Create(0,0);
+		key.Create(mKeyData,mKeyDataLength);
 		key.AddCrypto(&roundedPos2 , sizeof(roundedPos2));
 
 		// Decrypt the data found the block
@@ -171,7 +180,6 @@ BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesT
 	}
 
 	return TRUE;
-#endif
 }
 
 }; //< namespace BlobFileLib

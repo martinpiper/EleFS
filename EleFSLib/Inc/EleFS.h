@@ -14,7 +14,7 @@ namespace EleFSLib
 		virtual ~EleFS();
 
 		/// Probes a container file, creates it if it doesn't exist, checks if it is valid.
-		bool Initialise(const WCHAR *filename);
+		bool Initialise(const WCHAR *filename , const void *keyData = 0 , const size_t keyDataLength = 0);
 
 		class File
 		{
@@ -98,6 +98,9 @@ namespace EleFSLib
 
 		LONGLONG mLastContainerFileSize;
 		OVERLAPPED mOverlapped;
+
+		const void *mKeyData;
+		size_t mKeyDataLength;
 	}; //< class EleFS
 
 

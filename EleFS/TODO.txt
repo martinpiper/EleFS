@@ -1,9 +1,6 @@
-* Will need to add an encryption key from the command line
-
-
-
-
-* If no key on the comand line then FileCrypto can default to a plain text passthrough
+* The FileCrypto needs to populate the entire buffer to the end and consider only returning the section requested if it is smaller.
+	This is so the decrypt and encrypt can work on the full buffer if available.
+	Then can use the 32 bit optimised encrypt functions instead.
 
 
 

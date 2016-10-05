@@ -89,6 +89,7 @@ namespace EleFSLib
 #define FSLOCK(forWrite) \
 	FSLock _locker2(this,forWrite);	\
 	BlobFile blobFile(mLockedHandle);	\
+	blobFile.SetKeyData(mKeyData , mKeyDataLength);	\
 	ScopedEleFSHeader header(mHeader,blobFile,forWrite);
 
 
@@ -129,7 +130,7 @@ namespace EleFSLib
 	};
 
 
-	EleFS::EleFS() : mLockedHandle(INVALID_HANDLE_VALUE) , mLockCounter(0) , mLockedForWrite(false) , mLastContainerFileSize(0)
+	EleFS::EleFS() : mLockedHandle(INVALID_HANDLE_VALUE) , mLockCounter(0) , mLockedForWrite(false) , mLastContainerFileSize(0) , mKeyData(0) , mKeyDataLength(0)
 	{
 		InitializeCriticalSection(&mSection);
 	}
@@ -144,9 +145,11 @@ namespace EleFSLib
 		}
 	}
 
-	bool EleFS::Initialise(const WCHAR *filename)
+	bool EleFS::Initialise(const WCHAR *filename , const void *keyData , const size_t keyDataLength )
 	{
 		LOCK();
+		mKeyData = keyData;
+		mKeyDataLength = keyDataLength;
 
 		HANDLE handle = CreateFileW(filename,GENERIC_READ,FILE_SHARE_READ,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,0);
 		if (handle != INVALID_HANDLE_VALUE)

@@ -1446,6 +1446,7 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 
 void ShowUsage() {
 	fprintf(stderr, "EleFS.exe\n"
+		"  /p Password/pass phrase etc. Must be before the /f option. (ex. /p thisIsMyDevicePassword) If there is no password then the device is not encrypted.\n"
 		"  /f Container file (ex. /f c:\\Temp\\container.EleFS)\n"
 		"  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
 		"  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
@@ -1461,7 +1462,7 @@ void ShowUsage() {
 		"  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
 		"  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
 		"Examples:\n"
-		"\tEleFS.exe /f C:\\Temp\\container.EleFS /l M:\t\t\t# Mount C:\\Temp\\container.EleFS as RootDirectory into a drive of letter M:\\.\n"
+		"\tEleFS.exe /p devicePassword /f C:\\Temp\\container.EleFS /l M:\t\t\t# Mount C:\\Temp\\container.EleFS as RootDirectory into a drive of letter M:\\.\n"
 		"\tEleFS.exe /f C:\\Temp\\container.EleFS /l C:\\mount\\dokan\t# Mount C:\\Temp\\container.EleFS as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
 		"\tEleFS.exe /f C:\\Temp\\container.EleFS /l M: /n /u \\myfs\\myfs1\t# Mount C:\\Temp\\container.EleFS as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
 		"Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
@@ -1476,18 +1477,20 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 
 	_beginthread(sShellThread,0,0);
 
-	PDOKAN_OPERATIONS dokanOperations =
-		(PDOKAN_OPERATIONS)malloc(sizeof(DOKAN_OPERATIONS));
-	if (dokanOperations == NULL) {
+	PDOKAN_OPERATIONS dokanOperations = (PDOKAN_OPERATIONS)malloc(sizeof(DOKAN_OPERATIONS));
+	if (dokanOperations == NULL)
+	{
 		return EXIT_FAILURE;
 	}
 	PDOKAN_OPTIONS dokanOptions = (PDOKAN_OPTIONS)malloc(sizeof(DOKAN_OPTIONS));
-	if (dokanOptions == NULL) {
+	if (dokanOptions == NULL)
+	{
 		free(dokanOperations);
 		return EXIT_FAILURE;
 	}
 
-	if (argc < 3) {
+	if (argc < 3)
+	{
 		ShowUsage();
 		free(dokanOperations);
 		free(dokanOptions);
@@ -1501,14 +1504,23 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 	dokanOptions->Version = DOKAN_VERSION;
 	dokanOptions->ThreadCount = 0; // use default
 
-	for (command = 1; command < argc; command++) {
-		switch (towlower(argv[command][1])) {
+	WCHAR *password = 0;
+
+	for (command = 1; command < argc; command++)
+	{
+		switch (towlower(argv[command][1]))
+		{
+		case 'p':
+			command++;
+			DbgPrint(L"Using encryption\n");
+			password = argv[command];
+			break;
 		case 'f':
 			command++;
 			DbgPrint(L"ContainerPath: %ls\n", argv[command]);
 			wcscpy_s(ContainerPath, sizeof(ContainerPath) / sizeof(WCHAR), argv[command]);
 			sDriveLetter = argv[command][0];
-			sFS.Initialise(argv[command]);
+			sFS.Initialise(argv[command] , password , wcslen(password) * sizeof(WCHAR));
 			break;
 		case L'l':
 			command++;

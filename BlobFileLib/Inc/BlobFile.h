@@ -78,6 +78,10 @@ namespace BlobFileLib
 		bool GetBlockSize(LONGLONG handle,LONGLONG &theSize);
 		bool IsValidHandle(LONGLONG &handle);
 
+		void SetKeyData(const void *keyData = 0 , const size_t keyDataLength = 0)
+		{
+			mCrypto.SetKeyData(keyData , keyDataLength);
+		}
 	private:
 		LONGLONG InternalAllocateBlock(const LONGLONG size);
 		bool InternalFreeBlock(LONGLONG handle);
