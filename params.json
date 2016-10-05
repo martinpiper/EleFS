@@ -1,0 +1,6 @@
+{
+  "name": "Elefs",
+  "tagline": "A Dokan based container file system.",
+  "body": "EleFS\r\n=====\r\n\r\nA long time ago, for a computer far far away, there was a blob file based file system called EleFS for the Acorn Archimedes.\r\n\r\nThis uses Dokan V1.0.0 https://github.com/dokan-dev/dokany/releases/tag/v1.0.0\r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
