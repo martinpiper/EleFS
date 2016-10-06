@@ -69,11 +69,10 @@ BOOL FileCrypto::ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToR
 	while (totalToTransfer > 0)
 	{
 		LONGLONG roundedPos2 = (roundedPos * extraTwist) ^ extraTwist ^ (roundedPos>>3);
-		DWORD toChunk = min(totalToTransfer + insideBlockOffset , mEncryptedBlockSize);
 		// First fill the buffer with aligned data
 		DWORD bytesRead;
 		SetFilePointerEx(hFile , MakeLarge(roundedPos) , 0 , FILE_BEGIN);
-		if (!::ReadFile(hFile, mTempBuffer, toChunk, &bytesRead, 0))
+		if (!::ReadFile(hFile, mTempBuffer, mEncryptedBlockSize, &bytesRead, 0))
 		{
 			return FALSE;
 		}
@@ -87,8 +86,9 @@ BOOL FileCrypto::ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToR
 		key.Create(mKeyData,mKeyDataLength);
 		key.AddCrypto(&roundedPos2 , sizeof(roundedPos2));
 
-		// Decrypt the data found the block
-		RNReplicaNet::Encryption::CommutativeDecryptBytewise(mTempBuffer , bytesRead , &key);
+		// Decrypt the data found in the block
+		RNReplicaNet::Encryption::CommutativeDecrypt(mTempBuffer , bytesRead , &key);
+		RNReplicaNet::Encryption::Decrypt(mTempBuffer , bytesRead , &key);
 
 		// Copy the information into the buffers at the correct offset
 		DWORD toCopy = min(totalToTransfer , mEncryptedBlockSize - insideBlockOffset);
@@ -132,11 +132,11 @@ BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesT
 	while (totalToTransfer > 0)
 	{
 		LONGLONG roundedPos2 = (roundedPos * extraTwist) ^ extraTwist ^ (roundedPos>>3);
-		DWORD toChunk = min(totalToTransfer + insideBlockOffset , mEncryptedBlockSize);
 		// First fill the buffer with aligned data
 		DWORD bytesRead;
 		SetFilePointerEx(hFile , MakeLarge(roundedPos) , 0 , FILE_BEGIN);
-		if (!::ReadFile(hFile, mTempBuffer, toChunk, &bytesRead, 0))
+		// Try to read up to a full aligned buffer
+		if (!::ReadFile(hFile, mTempBuffer, mEncryptedBlockSize, &bytesRead, 0))
 		{
 			return FALSE;
 		}
@@ -145,10 +145,11 @@ BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesT
 		key.Create(mKeyData,mKeyDataLength);
 		key.AddCrypto(&roundedPos2 , sizeof(roundedPos2));
 
-		// Decrypt the data found the block
+		// Decrypt the data read in the block
 		if (bytesRead > 0)
 		{
-			RNReplicaNet::Encryption::CommutativeDecryptBytewise(mTempBuffer , bytesRead , &key);
+			RNReplicaNet::Encryption::CommutativeDecrypt(mTempBuffer , bytesRead , &key);
+			RNReplicaNet::Encryption::Decrypt(mTempBuffer , bytesRead , &key);
 		}
 
 		// Copy the information into the buffers at the correct offset
@@ -156,7 +157,9 @@ BOOL FileCrypto::WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesT
 		CopyMemory(mTempBuffer + insideBlockOffset , lpBuffer ,  toCopy);
 
 		// Now encrypt the output block
-		RNReplicaNet::Encryption::CommutativeEncryptBytewise(mTempBuffer , toChunk , &key);
+		DWORD toChunk = max( min(totalToTransfer + insideBlockOffset , mEncryptedBlockSize) , bytesRead);
+		RNReplicaNet::Encryption::Encrypt(mTempBuffer , toChunk , &key);
+		RNReplicaNet::Encryption::CommutativeEncrypt(mTempBuffer , toChunk , &key);
 
 		// Write out the first block again
 		SetFilePointerEx(hFile , MakeLarge(roundedPos) , 0 , FILE_BEGIN);
