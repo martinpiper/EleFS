@@ -1,12 +1,3 @@
-* EleFSMain.cpp:MirrorCreateFile()
-	Potential to optimise "fileAttr = sFS.GetFileAttributes(FileName);" and the next "DokanFileInfo->IsDirectory = TRUE" by checking for a simple root folder "\\" (rootFolder = etc) request first
-	Also don't need to do this if the IsDirectory flag is already set.
-	Also the return for "return STATUS_OBJECT_NAME_COLLISION" can be mapped straight through for FILE_CREATE because the return status for "sFS.FileOpen" is ERROR_FILE_EXISTS
-	And Dokan already maps "case ERROR_FILE_EXISTS:                       return STATUS_OBJECT_NAME_COLLISION;" https://github.com/dokan-dev/dokany/blob/master/dokan/ntstatus.i
-	
-
-
-
 * Implement storage of extra file information as a generic text field in EleFS. This is to be used for file security tokens.
 
 

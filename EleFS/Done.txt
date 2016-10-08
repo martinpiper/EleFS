@@ -17,3 +17,13 @@
 * The FileCrypto needs to populate the entire buffer to the end and consider only returning the section requested if it is smaller.
 	This is so the decrypt and encrypt can work on the full buffer if available.
 	Then can use the 32 bit optimised encrypt functions instead.
+
+
+
+
+* EleFSMain.cpp:MirrorCreateFile()
+	Potential to optimise "fileAttr = sFS.GetFileAttributes(FileName);" and the next "DokanFileInfo->IsDirectory = TRUE" by checking for a simple root folder "\\" (rootFolder = etc) request first
+	Also don't need to do this if the IsDirectory flag is already set.
+	Also the return for "return STATUS_OBJECT_NAME_COLLISION" can be mapped straight through for FILE_CREATE because the return status for "sFS.FileOpen" is ERROR_FILE_EXISTS
+	And Dokan already maps "case ERROR_FILE_EXISTS:                       return STATUS_OBJECT_NAME_COLLISION;" https://github.com/dokan-dev/dokany/blob/master/dokan/ntstatus.i
+	

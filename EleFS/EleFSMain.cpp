@@ -169,7 +169,6 @@ static NTSTATUS DOKAN_CALLBACK
 	ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo)
 {
 	EleFS::File* handle;
-	DWORD fileAttr;
 	NTSTATUS status = STATUS_SUCCESS;
 	DWORD creationDisposition;
 	DWORD fileAttributesAndFlags;
@@ -247,11 +246,8 @@ static NTSTATUS DOKAN_CALLBACK
 	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
 	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
 
-	// When filePath is a directory, needs to change the flag so that the file can
-	// be opened.
-	fileAttr = sFS.GetFileAttributes(FileName);
-
-	if (fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY) &&	!(CreateOptions & FILE_NON_DIRECTORY_FILE))
+	BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
+	if (rootFolder)
 	{
 		DokanFileInfo->IsDirectory = TRUE;
 	}
@@ -331,12 +327,6 @@ static NTSTATUS DOKAN_CALLBACK
 	}
 	else
 	{
-		// It is a create file request
-		if (fileAttr != INVALID_FILE_ATTRIBUTES && (fileAttr & FILE_ATTRIBUTE_DIRECTORY) && CreateDisposition == FILE_CREATE)
-		{
-			return STATUS_OBJECT_NAME_COLLISION; // File already exist because GetFileAttributes found it
-		}
-
 		handle = sFS.FileOpen(FileName,	DesiredAccess, ShareAccess, &securityAttrib, creationDisposition, fileAttributesAndFlags);
 
 		if (!handle || handle == INVALID_HANDLE_VALUE)
