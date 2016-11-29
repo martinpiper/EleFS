@@ -2,6 +2,8 @@
 Options:
 /f C:\temp\container.EleFs /l M:\ /s /d /m
 /f C:\temp\container.EleFs /l M:\ /m
+/p cryptoPassword /f C:\temp\container.EleFs /l M:\ /s /d /m
+/p cryptoPassword /f C:\temp\container.EleFs /l M:\ /m
 */
 
 #define WIN32_NO_STATUS
@@ -28,8 +30,10 @@ BOOL g_DebugMode;
 #pragma comment( lib, "EleFSLib.lib" )
 
 
-static void DbgPrint(LPCWSTR format, ...) {
-	if (g_DebugMode) {
+static void DbgPrint(LPCWSTR format, ...)
+{
+	if (g_DebugMode)
+	{
 		const WCHAR *outputString;
 		WCHAR *buffer = NULL;
 		size_t length;
@@ -38,21 +42,33 @@ static void DbgPrint(LPCWSTR format, ...) {
 		va_start(argp, format);
 		length = _vscwprintf(format, argp) + 1;
 		buffer = (WCHAR*) _malloca(length * sizeof(WCHAR));
-		if (buffer) {
+		if (buffer)
+		{
 			vswprintf_s(buffer, length, format, argp);
 			outputString = buffer;
-		} else {
+		}
+		else
+		{
 			outputString = format;
 		}
 		if (g_UseStdErr)
+		{
 			fputws(outputString, stderr);
+		}
 		else
+		{
 			OutputDebugStringW(outputString);
+		}
+
 		if (buffer)
+		{
 			_freea(buffer);
+		}
 		va_end(argp);
 		if (g_UseStdErr)
+		{
 			fflush(stderr);
+		}
 	}
 }
 
@@ -61,7 +77,8 @@ static WCHAR ContainerPath[MAX_PATH] = L"";
 static WCHAR MountPoint[MAX_PATH] = L"M:\\";
 static WCHAR UNCName[MAX_PATH] = L"";
 
-static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
+static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo)
+{
 	HANDLE handle;
 	UCHAR buffer[1024];
 	DWORD returnLength;
@@ -470,12 +487,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 											  LONGLONG Offset,
 											  PDOKAN_FILE_INFO DokanFileInfo)
 {
-
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	ULONG offset = (ULONG)Offset;
-	BOOL opened = FALSE;
 
 	DbgPrint(L"ReadFile : %s\n", FileName);
 
@@ -483,53 +498,27 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 	{
 		DbgPrint(L"\tinvalid handle, cleanuped?\n");
 		handle = sFS.FileOpen(FileName, GENERIC_READ, FILE_SHARE_READ, NULL,OPEN_EXISTING, 0);
+		closer.SetFile(handle);
 		if (!handle || handle == INVALID_HANDLE_VALUE)
 		{
 			DWORD error = GetLastError();
 			DbgPrint(L"\tCreateFile error : %d\n\n", error);
 			return DokanNtStatusFromWin32(error);
 		}
-		opened = TRUE;
 	}
 
 	handle->mFilePointer = Offset;
 
-	if (ReadLength)
+	if (!sFS.ReadFile(handle, Buffer, BufferLength, ReadLength))
 	{
-		*ReadLength = 0;
+		DWORD error = GetLastError();
+		DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n",error, BufferLength, *ReadLength);
+		return DokanNtStatusFromWin32(error);
+
 	}
-
-	DWORD readThisPass = 0;
-	while (BufferLength)
+	else
 	{
-		DWORD toReadThisPass = min(0x10000,BufferLength);
-		if (!sFS.ReadFile(handle, Buffer, toReadThisPass, &readThisPass))
-		{
-			DWORD error = GetLastError();
-			DbgPrint(L"\tread error = %u, buffer length = %d, read length = %d\n",error, BufferLength, *ReadLength);
-			return DokanNtStatusFromWin32(error);
-
-		}
-		else
-		{
-			DbgPrint(L"\tread %d, offset %d\n\n", *ReadLength, Offset);
-		}
-		BufferLength -= toReadThisPass;
-		Buffer = ((char*)Buffer) + toReadThisPass;
-		if (ReadLength)
-		{
-			*ReadLength += readThisPass;
-		}
-
-		if (toReadThisPass != readThisPass)
-		{
-			break;
-		}
-	}
-
-	if (opened)
-	{
-		sFS.CloseFile(handle);
+		DbgPrint(L"\tread %d, offset %I64d, read length = %d\n\n", BufferLength, Offset, ReadLength?-1:*ReadLength);
 	}
 
 	return STATUS_SUCCESS;
@@ -560,41 +549,26 @@ static NTSTATUS DOKAN_CALLBACK
 		}
 	}
 
-	if (DokanFileInfo->WriteToEndOfFile) {
+	if (DokanFileInfo->WriteToEndOfFile)
+	{
 		handle->mFilePointer = handle->mFileSize;
-	} else {
+	}
+	else
+	{
 		handle->mFilePointer = Offset;
 	}
 
-	DWORD writtenThisPass = 0;
-	while (NumberOfBytesToWrite)
+	if (!sFS.WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten))
 	{
-		DWORD toWriteThisPass = min(0x10000,NumberOfBytesToWrite);
-		if (!sFS.WriteFile(handle, Buffer, toWriteThisPass, &writtenThisPass))
-		{
-			DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n", GetLastError(), NumberOfBytesToWrite, *NumberOfBytesWritten);
-			return DokanNtStatusFromWin32(ERROR_INVALID_FUNCTION);
-
-		}
-		else
-		{
-			DbgPrint(L"\twrite %d, offset %d\n\n", *NumberOfBytesWritten, Offset);
-		}
-
-		NumberOfBytesToWrite -= toWriteThisPass;
-		Buffer = ((char*)Buffer) + toWriteThisPass;
-		if (NumberOfBytesWritten)
-		{
-			*NumberOfBytesWritten += writtenThisPass;
-		}
-
-		if (toWriteThisPass != writtenThisPass)
-		{
-			break;
-		}
+		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n", GetLastError(), NumberOfBytesToWrite, NumberOfBytesWritten?-1:*NumberOfBytesWritten);
+		return DokanNtStatusFromWin32(ERROR_INVALID_FUNCTION);
+	}
+	else
+	{
+		DbgPrint(L"\twrite %d, offset %I64d, write length = %d\n\n", *NumberOfBytesWritten, Offset, NumberOfBytesWritten?-1:*NumberOfBytesWritten);
 	}
 
-	return 0;
+	return STATUS_SUCCESS;
 }
 
 static NTSTATUS DOKAN_CALLBACK
@@ -611,7 +585,7 @@ static NTSTATUS DOKAN_CALLBACK
 		return 0;
 	}
 
-	return 0;
+	return STATUS_SUCCESS;
 }
 
 
@@ -661,7 +635,7 @@ static NTSTATUS DOKAN_CALLBACK
 
 	DbgPrint(L"\n");
 
-	return 0;
+	return STATUS_SUCCESS;
 }
 
 class AutoLocker
