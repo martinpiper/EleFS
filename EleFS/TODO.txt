@@ -1,3 +1,18 @@
+* Might want to use CommutativeEncryptBytewise() for byte wise support instead of the 32 bit chunked crypto?
+
+
+
+
+* Expand the tests so that a new file system is mounted
+	* Files copied into it from multiple processes (use bat files)
+	* The resultant files verified
+	* Unmounted
+	* Remounted
+	* The resultant files verified again
+
+
+
+
 * Implement storage of extra file information as a generic text field in EleFS. This is to be used for file security tokens.
 
 
