@@ -1484,7 +1484,14 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 			DbgPrint(L"ContainerPath: %ls\n", argv[command]);
 			wcscpy_s(ContainerPath, sizeof(ContainerPath) / sizeof(WCHAR), argv[command]);
 			sDriveLetter = argv[command][0];
-			sFS.Initialise(argv[command] , password , wcslen(password) * sizeof(WCHAR));
+			if (0 != password)
+			{
+				sFS.Initialise(argv[command] , password , wcslen(password) * sizeof(WCHAR));
+			}
+			else
+			{
+				sFS.Initialise(argv[command]);
+			}
 			break;
 		case L'l':
 			command++;
