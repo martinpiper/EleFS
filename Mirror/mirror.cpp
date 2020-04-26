@@ -33,7 +33,7 @@ THE SOFTWARE.
 #include <winbase.h>
 #include <sddl.h>
 
-#pragma comment( lib, "Dokan\\Win32\\Debug\\dokan1.lib" )
+#pragma comment( lib, "dokan1.lib" )
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
@@ -194,6 +194,7 @@ static NTSTATUS DOKAN_CALLBACK
 		NTSTATUS status = STATUS_SUCCESS;
 		DWORD creationDisposition;
 		DWORD fileAttributesAndFlags;
+		ACCESS_MASK outDesiredAccess;
 		DWORD error = 0;
 		SECURITY_ATTRIBUTES securityAttrib;
 
@@ -203,7 +204,7 @@ static NTSTATUS DOKAN_CALLBACK
 		securityAttrib.bInheritHandle = FALSE;
 
 		DokanMapKernelToUserCreateFileFlags(
-			FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags,
+			DesiredAccess, FileAttributes, CreateOptions, CreateDisposition, &outDesiredAccess, &fileAttributesAndFlags,
 			&creationDisposition);
 
 		GetFilePath(filePath, MAX_PATH, FileName);

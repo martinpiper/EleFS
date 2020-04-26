@@ -26,7 +26,7 @@ BOOL g_UseStdErr;
 BOOL g_DebugMode;
 
 
-#pragma comment( lib, "Dokan\\Win32\\Debug\\dokan1.lib" )
+#pragma comment( lib, "dokan1.lib" )
 #pragma comment( lib, "EleFSLib.lib" )
 
 
@@ -189,6 +189,7 @@ static NTSTATUS DOKAN_CALLBACK
 	NTSTATUS status = STATUS_SUCCESS;
 	DWORD creationDisposition;
 	DWORD fileAttributesAndFlags;
+	ACCESS_MASK outDesiredAccess;
 	DWORD error = 0;
 	SECURITY_ATTRIBUTES securityAttrib;
 
@@ -196,7 +197,12 @@ static NTSTATUS DOKAN_CALLBACK
 	securityAttrib.lpSecurityDescriptor = SecurityContext->AccessState.SecurityDescriptor;
 	securityAttrib.bInheritHandle = FALSE;
 
-	DokanMapKernelToUserCreateFileFlags(FileAttributes, CreateOptions, CreateDisposition, &fileAttributesAndFlags, &creationDisposition);
+	void DOKANAPI DokanMapKernelToUserCreateFileFlags(
+		ACCESS_MASK DesiredAccess, ULONG FileAttributes, ULONG CreateOptions,
+		ULONG CreateDisposition, ACCESS_MASK *outDesiredAccess,
+		DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
+
+	DokanMapKernelToUserCreateFileFlags(DesiredAccess, FileAttributes, CreateOptions, CreateDisposition, &outDesiredAccess, &fileAttributesAndFlags, &creationDisposition);
 
 	DbgPrint(L"CreateFile : %s\n", FileName);
 

@@ -1,3 +1,9 @@
+* Enabling encryption causes corruption? Investigate why.
+	Or does corruption happen without encryption, but just less often?
+
+
+
+
 * Might want to use CommutativeEncryptBytewise() for byte wise support instead of the 32 bit chunked crypto?
 
 
