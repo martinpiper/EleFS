@@ -189,7 +189,7 @@ static NTSTATUS DOKAN_CALLBACK
 	NTSTATUS status = STATUS_SUCCESS;
 	DWORD creationDisposition;
 	DWORD fileAttributesAndFlags;
-	ACCESS_MASK outDesiredAccess;
+	ACCESS_MASK genericDesiredAccess;
 	DWORD error = 0;
 	SECURITY_ATTRIBUTES securityAttrib;
 
@@ -202,7 +202,7 @@ static NTSTATUS DOKAN_CALLBACK
 		ULONG CreateDisposition, ACCESS_MASK *outDesiredAccess,
 		DWORD *outFileAttributesAndFlags, DWORD *outCreationDisposition);
 
-	DokanMapKernelToUserCreateFileFlags(DesiredAccess, FileAttributes, CreateOptions, CreateDisposition, &outDesiredAccess, &fileAttributesAndFlags, &creationDisposition);
+	DokanMapKernelToUserCreateFileFlags(DesiredAccess, FileAttributes, CreateOptions, CreateDisposition, &genericDesiredAccess, &fileAttributesAndFlags, &creationDisposition);
 
 	DbgPrint(L"CreateFile : %s\n", FileName);
 
@@ -333,7 +333,7 @@ static NTSTATUS DOKAN_CALLBACK
 		if (status == STATUS_SUCCESS)
 		{
 			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-			handle = sFS.FileOpen(FileName, DesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,	fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
+			handle = sFS.FileOpen(FileName, genericDesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,	fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
 
 			if (!handle || handle == INVALID_HANDLE_VALUE)
 			{
@@ -350,7 +350,7 @@ static NTSTATUS DOKAN_CALLBACK
 	}
 	else
 	{
-		handle = sFS.FileOpen(FileName,	DesiredAccess, ShareAccess, &securityAttrib, creationDisposition, fileAttributesAndFlags);
+		handle = sFS.FileOpen(FileName, genericDesiredAccess, ShareAccess, &securityAttrib, creationDisposition, fileAttributesAndFlags);
 
 		if (!handle || handle == INVALID_HANDLE_VALUE)
 		{
