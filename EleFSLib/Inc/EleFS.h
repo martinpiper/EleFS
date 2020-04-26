@@ -46,7 +46,7 @@ namespace EleFSLib
 		void Unlock(void);
 
 		/// Opens a file in the container if it exists. Uses similar similar parameters to CreateFile
-		File *FileOpen(const WCHAR *filename, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes);
+		File *FileOpen(const WCHAR *filename, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, bool isDirectoryRequest = false);
 
 		BOOL WriteFile(File *hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten);
 

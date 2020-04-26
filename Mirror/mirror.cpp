@@ -593,6 +593,25 @@ static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
 	}
 }
 
+static void printHexDump(unsigned char *buffer, size_t length)
+{
+	int checksum = 0;
+	for (size_t i = 0; i < length; i++)
+	{
+		checksum += length + buffer[i];
+	}
+	printf("checksum: %8x\n", checksum);
+	if (length > 128)
+	{
+		length = 128;
+	}
+	while (length-- > 0)
+	{
+		printf("%02x", *buffer++);
+	}
+	printf("\n");
+}
+
 static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 	DWORD BufferLength,
 	LPDWORD ReadLength,
@@ -641,6 +660,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 	else {
 		DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,
 			*ReadLength, offset);
+//		printHexDump((unsigned char *)Buffer, *ReadLength);
 	}
 
 	if (opened)

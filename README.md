@@ -14,6 +14,7 @@ Install: DokanSetup_redist.exe
 
 Example command lines:
 
-* /p cryptoPassword /f C:\temp\container.EleFs /l M:\ /s /d /m
+* /p cryptoPassword /f C:\temp\containerEncrypted.EleFs /l M:\ /s /d /m
+* /p cryptoPassword /f C:\temp\containerEncrypted.EleFs /l M:\ /m
 * /f C:\temp\container.EleFs /l M:\ /s /d /m
 * /f C:\temp\container.EleFs /l M:\ /s /m

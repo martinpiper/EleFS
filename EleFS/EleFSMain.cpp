@@ -279,6 +279,7 @@ static NTSTATUS DOKAN_CALLBACK
 
 	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
 	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
+	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DIRECTORY);
 	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
 	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
 	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
@@ -333,7 +334,7 @@ static NTSTATUS DOKAN_CALLBACK
 		if (status == STATUS_SUCCESS)
 		{
 			// FILE_FLAG_BACKUP_SEMANTICS is required for opening directory handles
-			handle = sFS.FileOpen(FileName, genericDesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,	fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS);
+			handle = sFS.FileOpen(FileName, genericDesiredAccess, ShareAccess, &securityAttrib, OPEN_EXISTING,	fileAttributesAndFlags | FILE_FLAG_BACKUP_SEMANTICS, true);
 
 			if (!handle || handle == INVALID_HANDLE_VALUE)
 			{
@@ -487,6 +488,25 @@ struct AutoCloseFile
 	EleFSLib::EleFS::File *mFile;
 };
 
+static void printHexDump(unsigned char *buffer, size_t length)
+{
+	int checksum = 0;
+	for (size_t i = 0; i < length; i++)
+	{
+		checksum += length + buffer[i];
+	}
+	printf("checksum: %8x\n", checksum);
+	if (length > 128)
+	{
+		length = 128;
+	}
+	while (length-- > 0)
+	{
+		printf("%02x", *buffer++);
+	}
+	printf("\n");
+}
+
 static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 											  DWORD BufferLength,
 											  LPDWORD ReadLength,
@@ -524,7 +544,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 	}
 	else
 	{
-		DbgPrint(L"\tread %d, offset %I64d, read length = %d\n\n", BufferLength, Offset, ReadLength?-1:*ReadLength);
+		DbgPrint(L"\tByte to read: %d, Byte read %d, offset %d\n\n", BufferLength,*ReadLength, offset);
+//		printHexDump((unsigned char *)Buffer, *ReadLength);
 	}
 
 	return STATUS_SUCCESS;
@@ -566,12 +587,12 @@ static NTSTATUS DOKAN_CALLBACK
 
 	if (!sFS.WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten))
 	{
-		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n", GetLastError(), NumberOfBytesToWrite, NumberOfBytesWritten?-1:*NumberOfBytesWritten);
+		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n", GetLastError(), NumberOfBytesToWrite, NumberOfBytesWritten?*NumberOfBytesWritten:-1);
 		return DokanNtStatusFromWin32(ERROR_INVALID_FUNCTION);
 	}
 	else
 	{
-		DbgPrint(L"\twrite %d, offset %I64d, write length = %d\n\n", *NumberOfBytesWritten, Offset, NumberOfBytesWritten?-1:*NumberOfBytesWritten);
+		DbgPrint(L"\twrite %d, offset %I64d, write length = %d\n\n", *NumberOfBytesWritten, Offset, NumberOfBytesWritten?*NumberOfBytesWritten:-1);
 	}
 
 	return STATUS_SUCCESS;

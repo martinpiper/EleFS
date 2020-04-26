@@ -476,7 +476,7 @@ namespace EleFSLib
 	}
 
 
-	EleFS::File *EleFS::FileOpen(const WCHAR *filename, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes)
+	EleFS::File *EleFS::FileOpen(const WCHAR *filename, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, bool isDirectoryRequest)
 	{
 		SetLastError(ERROR_SUCCESS);
 		LOCK();
@@ -557,6 +557,14 @@ namespace EleFSLib
 
 		if (searchHandle)
 		{
+			// This fixes VLC trying to play a file
+			if (isDirectoryRequest && !entry.mIsDirectory)
+			{
+				// MPi: TODO: Look for a better alternative to ERROR_NO_MORE_ITEMS
+				// During tests with "mirror" this returns: CreateFile status = c0000103
+				SetLastError(ERROR_NO_MORE_ITEMS);
+				return 0;
+			}
 			if (needLock)
 			{
 				blobFile.WriteBlock(searchHandle,&entry,sizeof(entry));
@@ -955,7 +963,7 @@ namespace EleFSLib
 			return FALSE;
 		}
 
-		lpFileInformation->dwFileAttributes = entry.mFileAttributes;
+		lpFileInformation->dwFileAttributes = entry.mFileAttributes & 0x7fffffff;
 		lpFileInformation->dwVolumeSerialNumber = 0;
 		lpFileInformation->ftCreationTime = entry.mCreationTime;
 		lpFileInformation->ftLastAccessTime = entry.mLastAccessTime;

@@ -436,6 +436,11 @@ int main(int argc, char **argv)
 
 		CheckFail(fs.CloseFile(file));
 
+		// Check a file cannot be opened by a directory request
+		file = fs.FileOpen(L"Directory1\\Directory2\\Moo.txt", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,true);
+		CheckFail(!file);
+		CheckFail(GetLastError() == ERROR_NO_MORE_ITEMS);
+
 		file = fs.FileOpen(L"Directory1\\Directory2\\Moo.txt",GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,0,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL);
 
 		if (!fs.WriteFile(file,testBlock,256,&numBytes))
