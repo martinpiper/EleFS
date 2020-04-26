@@ -25,12 +25,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include "../../dokan/dokan.h"
-#include "../../dokan/fileinfo.h"
+#define WIN32_NO_STATUS
+#include <time.h>
+#include <map>
+#include <ShlObj.h>
+#include <process.h>
+#include "dokan/dokan.h"
+#include "dokan/fileinfo.h"
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <winbase.h>
+#include <sddl.h>
+
 
 //#define WIN10_ENABLE_LONG_PATH
 #ifdef WIN10_ENABLE_LONG_PATH
@@ -38,15 +45,19 @@ THE SOFTWARE.
 #define DOKAN_MAX_PATH 32768
 #else
 #define DOKAN_MAX_PATH MAX_PATH
-#endif // DEBUG
+#endif // WIN10_ENABLE_LONG_PATH
+
+#pragma comment( lib, "dokan1.lib" )
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
 BOOL g_HasSeSecurityPrivilege;
 BOOL g_ImpersonateCallerUser;
 
-static void DbgPrint(LPCWSTR format, ...) {
-	if (g_DebugMode) {
+static void DbgPrint(LPCWSTR format, ...)
+{
+	if (g_DebugMode)
+	{
 		const WCHAR *outputString;
 		WCHAR *buffer = NULL;
 		size_t length;
@@ -54,23 +65,34 @@ static void DbgPrint(LPCWSTR format, ...) {
 
 		va_start(argp, format);
 		length = _vscwprintf(format, argp) + 1;
-		buffer = _malloca(length * sizeof(WCHAR));
-		if (buffer) {
+		buffer = (WCHAR*)_malloca(length * sizeof(WCHAR));
+		if (buffer)
+		{
 			vswprintf_s(buffer, length, format, argp);
 			outputString = buffer;
 		}
-		else {
+		else
+		{
 			outputString = format;
 		}
 		if (g_UseStdErr)
+		{
 			fputws(outputString, stderr);
+		}
 		else
+		{
 			OutputDebugStringW(outputString);
+		}
+
 		if (buffer)
+		{
 			_freea(buffer);
+		}
 		va_end(argp);
 		if (g_UseStdErr)
+		{
 			fflush(stderr);
+		}
 	}
 }
 
