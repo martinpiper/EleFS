@@ -1058,14 +1058,27 @@ static NTSTATUS DOKAN_CALLBACK
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
 	// Some sensible defaults if the disk free space code doesn't work
-	*FreeBytesAvailable = 512*1024*1024;
-	*TotalNumberOfBytes = 1024*1024*1024;
-	*TotalNumberOfFreeBytes = 512*1024*1024;
+	*FreeBytesAvailable = (ULONGLONG)512* (ULONGLONG)1024* (ULONGLONG)1024* (ULONGLONG)1024;
+	*TotalNumberOfBytes = (ULONGLONG)1024* (ULONGLONG)1024* (ULONGLONG)1024 * (ULONGLONG)1024;
+	*TotalNumberOfFreeBytes = (ULONGLONG)512* (ULONGLONG)1024* (ULONGLONG)1024 * (ULONGLONG)1024;
 
 	WCHAR drivePath[6];
 	drivePath[0] = sDriveLetter;
 	drivePath[1] = ':';
 	drivePath[2] = 0;
+
+#if 1
+#if 1
+	ULARGE_INTEGER lFreeBytesAvailableToCaller;
+	ULARGE_INTEGER lTotalNumberOfBytes;
+	ULARGE_INTEGER lTotalNumberOfFreeBytes;
+	if (GetDiskFreeSpaceExW(drivePath,&lFreeBytesAvailableToCaller,&lTotalNumberOfBytes,&lTotalNumberOfFreeBytes))
+	{
+		*FreeBytesAvailable = lFreeBytesAvailableToCaller.QuadPart;
+		*TotalNumberOfBytes = lTotalNumberOfBytes.QuadPart;
+		*TotalNumberOfFreeBytes = lTotalNumberOfFreeBytes.QuadPart;
+	}
+#else
 	DWORD spc, bps, fcl, tcl;
 	if (GetDiskFreeSpaceW(drivePath,&spc, &bps, &fcl, &tcl))
 	{
@@ -1073,6 +1086,8 @@ static NTSTATUS DOKAN_CALLBACK
 		*TotalNumberOfFreeBytes = *FreeBytesAvailable;
 		*TotalNumberOfBytes = (*FreeBytesAvailable) + sFS.GetLastContainerFileSize();
 	}
+#endif
+#endif
 
 	return 0;
 }
