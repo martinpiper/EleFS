@@ -1,3 +1,14 @@
+* File crypto version - Extend the mirror example
+	Salt for filename, in hex, then '_', then hex compressed and encrypted filename
+	Use long key, 256 bytes?, based on key plus salt for each file, use file position eor file position shifted based on key size, to use for each byte eor
+		Pass-through all reads and writes using byte eor
+	Advantages, uses underlying file caching and doesn't have complexities of container file based
+	
+
+
+
+
+
 * Striped crypto mode. Block size is multiplied by stripes. Offset within stripe. Blocks filled with random data.
 	Extent not reduced of course. New blocks will have to extend.
 	Obvious place would be to add this functionality to FileCrypto
