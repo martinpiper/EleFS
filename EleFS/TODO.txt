@@ -13,6 +13,13 @@
 			Might need to validate each part is a file or directory?
 		FillFindData -> findData.cFileName contains "." or ".." or a single filename or directory name, perfect for de-encrypting and getting a salt value from
 			Perhaps _DOKAN_FILE_INFO->Context can be used for the salt found in the filename?
+				Darn, it looks like it is used "->Context" for the real file handle
+			Plan B, means GetFilePath will need to do some scanning of files, decrypt them, file the right information and salt
+				This is because a salted filename will constantly change and needs intensive scanning to find
+					Which would be slow
+				Could use an internal cache of the path?
+
+
 
 
 

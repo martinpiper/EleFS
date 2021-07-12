@@ -956,7 +956,9 @@ EleFS2FindFiles(LPCWSTR FileName,
 	BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
 	do {
 		if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0))
+		{
 			FillFindData(&findData, DokanFileInfo);
+		}
 		count++;
 	} while (FindNextFile(hFind, &findData) != 0);
 
