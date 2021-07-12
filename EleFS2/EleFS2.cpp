@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <winbase.h>
 #include <sddl.h>
+#include "RNPlatform/Inc/Encryption.h"
 
 
 //#define WIN10_ENABLE_LONG_PATH
@@ -53,6 +54,9 @@ BOOL g_UseStdErr;
 BOOL g_DebugMode;
 BOOL g_HasSeSecurityPrivilege;
 BOOL g_ImpersonateCallerUser;
+
+bool gUsingEncryption = false;
+RNReplicaNet::Encryption::Key gMasterKey;
 
 static void DbgPrint(LPCWSTR format, ...)
 {
@@ -212,13 +216,13 @@ static BOOL AddSeSecurityNamePrivilege() {
 	return TRUE;
 }
 
-#define MirrorCheckFlag(val, flag)                                             \
+#define EleFS2CheckFlag(val, flag)                                             \
   if (val & flag) {                                                            \
     DbgPrint(L"\t" L#flag L"\n");                                              \
   }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
+EleFS2CreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 	ACCESS_MASK DesiredAccess, ULONG FileAttributes,
 	ULONG ShareAccess, ULONG CreateDisposition,
 	ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo) {
@@ -258,32 +262,32 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
 	DbgPrint(L"\tShareMode = 0x%x\n", ShareAccess);
 
-	MirrorCheckFlag(ShareAccess, FILE_SHARE_READ);
-	MirrorCheckFlag(ShareAccess, FILE_SHARE_WRITE);
-	MirrorCheckFlag(ShareAccess, FILE_SHARE_DELETE);
+	EleFS2CheckFlag(ShareAccess, FILE_SHARE_READ);
+	EleFS2CheckFlag(ShareAccess, FILE_SHARE_WRITE);
+	EleFS2CheckFlag(ShareAccess, FILE_SHARE_DELETE);
 
 	DbgPrint(L"\tDesiredAccess = 0x%x\n", DesiredAccess);
 
-	MirrorCheckFlag(DesiredAccess, GENERIC_READ);
-	MirrorCheckFlag(DesiredAccess, GENERIC_WRITE);
-	MirrorCheckFlag(DesiredAccess, GENERIC_EXECUTE);
+	EleFS2CheckFlag(DesiredAccess, GENERIC_READ);
+	EleFS2CheckFlag(DesiredAccess, GENERIC_WRITE);
+	EleFS2CheckFlag(DesiredAccess, GENERIC_EXECUTE);
 
-	MirrorCheckFlag(DesiredAccess, DELETE);
-	MirrorCheckFlag(DesiredAccess, FILE_READ_DATA);
-	MirrorCheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
-	MirrorCheckFlag(DesiredAccess, FILE_READ_EA);
-	MirrorCheckFlag(DesiredAccess, READ_CONTROL);
-	MirrorCheckFlag(DesiredAccess, FILE_WRITE_DATA);
-	MirrorCheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
-	MirrorCheckFlag(DesiredAccess, FILE_WRITE_EA);
-	MirrorCheckFlag(DesiredAccess, FILE_APPEND_DATA);
-	MirrorCheckFlag(DesiredAccess, WRITE_DAC);
-	MirrorCheckFlag(DesiredAccess, WRITE_OWNER);
-	MirrorCheckFlag(DesiredAccess, SYNCHRONIZE);
-	MirrorCheckFlag(DesiredAccess, FILE_EXECUTE);
-	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
-	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
-	MirrorCheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
+	EleFS2CheckFlag(DesiredAccess, DELETE);
+	EleFS2CheckFlag(DesiredAccess, FILE_READ_DATA);
+	EleFS2CheckFlag(DesiredAccess, FILE_READ_ATTRIBUTES);
+	EleFS2CheckFlag(DesiredAccess, FILE_READ_EA);
+	EleFS2CheckFlag(DesiredAccess, READ_CONTROL);
+	EleFS2CheckFlag(DesiredAccess, FILE_WRITE_DATA);
+	EleFS2CheckFlag(DesiredAccess, FILE_WRITE_ATTRIBUTES);
+	EleFS2CheckFlag(DesiredAccess, FILE_WRITE_EA);
+	EleFS2CheckFlag(DesiredAccess, FILE_APPEND_DATA);
+	EleFS2CheckFlag(DesiredAccess, WRITE_DAC);
+	EleFS2CheckFlag(DesiredAccess, WRITE_OWNER);
+	EleFS2CheckFlag(DesiredAccess, SYNCHRONIZE);
+	EleFS2CheckFlag(DesiredAccess, FILE_EXECUTE);
+	EleFS2CheckFlag(DesiredAccess, STANDARD_RIGHTS_READ);
+	EleFS2CheckFlag(DesiredAccess, STANDARD_RIGHTS_WRITE);
+	EleFS2CheckFlag(DesiredAccess, STANDARD_RIGHTS_EXECUTE);
 
 	// When filePath is a directory, needs to change the flag so that the file can
 	// be opened.
@@ -294,7 +298,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 		if (!(CreateOptions & FILE_NON_DIRECTORY_FILE)) {
 			DokanFileInfo->IsDirectory = TRUE;
 			// Needed by FindFirstFile to list files in it
-			// TODO: use ReOpenFile in MirrorFindFiles to set share read temporary
+			// TODO: use ReOpenFile in EleFS2FindFiles to set share read temporary
 			ShareAccess |= FILE_SHARE_READ;
 		}
 		else { // FILE_NON_DIRECTORY_FILE - Cannot open a dir as a file
@@ -305,40 +309,40 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 
 	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
 
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_COMPRESSED);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DEVICE);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DIRECTORY);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_INTEGRITY_STREAM);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NO_SCRUB_DATA);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_REPARSE_POINT);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SPARSE_FILE);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_VIRTUAL);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
-	MirrorCheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
-	MirrorCheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ARCHIVE);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_COMPRESSED);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DEVICE);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_DIRECTORY);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_ENCRYPTED);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_HIDDEN);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_INTEGRITY_STREAM);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NORMAL);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NOT_CONTENT_INDEXED);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_NO_SCRUB_DATA);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_OFFLINE);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_READONLY);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_REPARSE_POINT);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SPARSE_FILE);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_SYSTEM);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_TEMPORARY);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_ATTRIBUTE_VIRTUAL);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_WRITE_THROUGH);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_OVERLAPPED);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_NO_BUFFERING);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_RANDOM_ACCESS);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_SEQUENTIAL_SCAN);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_DELETE_ON_CLOSE);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_BACKUP_SEMANTICS);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_POSIX_SEMANTICS);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_REPARSE_POINT);
+	EleFS2CheckFlag(fileAttributesAndFlags, FILE_FLAG_OPEN_NO_RECALL);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_ANONYMOUS);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_IDENTIFICATION);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_IMPERSONATION);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_DELEGATION);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_CONTEXT_TRACKING);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_EFFECTIVE_ONLY);
+	EleFS2CheckFlag(fileAttributesAndFlags, SECURITY_SQOS_PRESENT);
 
 	if (creationDisposition == CREATE_NEW) {
 		DbgPrint(L"\tCREATE_NEW\n");
@@ -538,7 +542,7 @@ MirrorCreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 #pragma warning(push)
 #pragma warning(disable : 4305)
 
-static void DOKAN_CALLBACK MirrorCloseFile(LPCWSTR FileName,
+static void DOKAN_CALLBACK EleFS2CloseFile(LPCWSTR FileName,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
@@ -554,7 +558,7 @@ static void DOKAN_CALLBACK MirrorCloseFile(LPCWSTR FileName,
 	}
 }
 
-static void DOKAN_CALLBACK MirrorCleanup(LPCWSTR FileName,
+static void DOKAN_CALLBACK EleFS2Cleanup(LPCWSTR FileName,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
@@ -612,7 +616,30 @@ static void printHexDump(unsigned char *buffer, size_t length)
 	printf("\n");
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
+static void EncryptDecryptBuffer(LPCVOID Buffer, LPVOID DestinationBuffer, DWORD BufferLength, LONGLONG Offset)
+{
+	if (!gUsingEncryption)
+	{
+		return;
+	}
+	if (BufferLength <= 0)
+	{
+		return;
+	}
+
+	DWORD i = 0;
+	while (i < BufferLength)
+	{
+		int safeKeyIndex = Offset % RNReplicaNet::kEncryptionKeyLengthBytes;
+
+		((unsigned char*)DestinationBuffer)[i] = (unsigned char)(((unsigned char*)Buffer)[i] ^ (Offset) ^ (Offset >> 8) ^ (Offset >> 16) ^ (Offset >> 24) ^ gMasterKey.mKey[safeKeyIndex]);
+
+		Offset++;
+		i++;
+	}
+}
+
+static NTSTATUS DOKAN_CALLBACK EleFS2ReadFile(LPCWSTR FileName, LPVOID Buffer,
 	DWORD BufferLength,
 	LPDWORD ReadLength,
 	LONGLONG Offset,
@@ -663,13 +690,16 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 		//		printHexDump((unsigned char *)Buffer, *ReadLength);
 	}
 
+	// In place decryption
+	EncryptDecryptBuffer(Buffer, Buffer, *ReadLength, Offset);
+
 	if (opened)
 		CloseHandle(handle);
 
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
+static NTSTATUS DOKAN_CALLBACK EleFS2WriteFile(LPCWSTR FileName, LPCVOID Buffer,
 	DWORD NumberOfBytesToWrite,
 	LPDWORD NumberOfBytesWritten,
 	LONGLONG Offset,
@@ -744,7 +774,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 		}
 
 		if ((UINT64)Offset > fileSize) {
-			// In the mirror sample helperZeroFileData is not necessary. NTFS will
+			// In the EleFS2 sample helperZeroFileData is not necessary. NTFS will
 			// zero a hole.
 			// But if user's file system is different from NTFS( or other Windows's
 			// file systems ) then  users will have to zero the hole themselves.
@@ -760,11 +790,24 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 		}
 	}
 
-	if (!WriteFile(handle, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten,
+	LPVOID realBuffer = (LPVOID)Buffer;
+	if (gUsingEncryption)
+	{
+		realBuffer = HeapAlloc(GetProcessHeap(), 0, NumberOfBytesToWrite);
+		EncryptDecryptBuffer(Buffer, realBuffer, NumberOfBytesToWrite, Offset);
+	}
+
+	if (!WriteFile(handle, realBuffer, NumberOfBytesToWrite, NumberOfBytesWritten,
 		NULL)) {
 		DWORD error = GetLastError();
 		DbgPrint(L"\twrite error = %u, buffer length = %d, write length = %d\n",
 			error, NumberOfBytesToWrite, *NumberOfBytesWritten);
+
+		if (gUsingEncryption)
+		{
+			HeapFree(GetProcessHeap(), 0, realBuffer);
+		}
+
 		if (opened)
 			CloseHandle(handle);
 		return DokanNtStatusFromWin32(error);
@@ -772,6 +815,11 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 	}
 	else {
 		DbgPrint(L"\twrite %d, offset %I64d\n\n", *NumberOfBytesWritten, Offset);
+	}
+
+	if (gUsingEncryption)
+	{
+		HeapFree(GetProcessHeap(), 0, realBuffer);
 	}
 
 	// close the file when it is reopened
@@ -782,7 +830,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorWriteFile(LPCWSTR FileName, LPCVOID Buffer,
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
+EleFS2FlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
@@ -805,7 +853,7 @@ MirrorFlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	}
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
+static NTSTATUS DOKAN_CALLBACK EleFS2GetFileInformation(
 	LPCWSTR FileName, LPBY_HANDLE_FILE_INFORMATION HandleFileInformation,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
@@ -873,7 +921,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorFindFiles(LPCWSTR FileName,
+EleFS2FindFiles(LPCWSTR FileName,
 	PFillFindData FillFindData, // function pointer
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
@@ -907,8 +955,7 @@ MirrorFindFiles(LPCWSTR FileName,
 	// Root folder does not have . and .. folder - we remove them
 	BOOLEAN rootFolder = (wcscmp(FileName, L"\\") == 0);
 	do {
-		if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 &&
-			wcscmp(findData.cFileName, L"..") != 0))
+		if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0))
 			FillFindData(&findData, DokanFileInfo);
 		count++;
 	} while (FindNextFile(hFind, &findData) != 0);
@@ -927,7 +974,7 @@ MirrorFindFiles(LPCWSTR FileName,
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
+EleFS2DeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
@@ -952,7 +999,7 @@ MirrorDeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
+EleFS2DeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	// HANDLE	handle = (HANDLE)DokanFileInfo->Context;
 	HANDLE hFind;
@@ -1008,7 +1055,7 @@ MirrorDeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorMoveFile(LPCWSTR FileName, // existing file name
+EleFS2MoveFile(LPCWSTR FileName, // existing file name
 	LPCWSTR NewFileName, BOOL ReplaceIfExisting,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
@@ -1071,7 +1118,7 @@ MirrorMoveFile(LPCWSTR FileName, // existing file name
 	}
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
+static NTSTATUS DOKAN_CALLBACK EleFS2LockFile(LPCWSTR FileName,
 	LONGLONG ByteOffset,
 	LONGLONG Length,
 	PDOKAN_FILE_INFO DokanFileInfo) {
@@ -1104,7 +1151,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorLockFile(LPCWSTR FileName,
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(
+static NTSTATUS DOKAN_CALLBACK EleFS2SetEndOfFile(
 	LPCWSTR FileName, LONGLONG ByteOffset, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle;
@@ -1137,7 +1184,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetEndOfFile(
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(
+static NTSTATUS DOKAN_CALLBACK EleFS2SetAllocationSize(
 	LPCWSTR FileName, LONGLONG AllocSize, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle;
@@ -1178,7 +1225,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetAllocationSize(
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
+static NTSTATUS DOKAN_CALLBACK EleFS2SetFileAttributes(
 	LPCWSTR FileName, DWORD FileAttributes, PDOKAN_FILE_INFO DokanFileInfo) {
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
@@ -1208,7 +1255,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileAttributes(
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorSetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
+EleFS2SetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
 	CONST FILETIME *LastAccessTime, CONST FILETIME *LastWriteTime,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
@@ -1236,7 +1283,7 @@ MirrorSetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
 }
 
 static NTSTATUS DOKAN_CALLBACK
-MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
+EleFS2UnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle;
@@ -1267,7 +1314,7 @@ MirrorUnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
+static NTSTATUS DOKAN_CALLBACK EleFS2GetFileSecurity(
 	LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
 	PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
 	PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo) {
@@ -1280,21 +1327,21 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 
 	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
-	MirrorCheckFlag(*SecurityInformation, FILE_SHARE_READ);
-	MirrorCheckFlag(*SecurityInformation, OWNER_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, GROUP_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, SACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, LABEL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation,
+	EleFS2CheckFlag(*SecurityInformation, FILE_SHARE_READ);
+	EleFS2CheckFlag(*SecurityInformation, OWNER_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, GROUP_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, DACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, SACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, LABEL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, ATTRIBUTE_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, SCOPE_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation,
 		PROCESS_TRUST_LABEL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
-	MirrorCheckFlag(*SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, BACKUP_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, PROTECTED_DACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, PROTECTED_SACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, UNPROTECTED_DACL_SECURITY_INFORMATION);
+	EleFS2CheckFlag(*SecurityInformation, UNPROTECTED_SACL_SECURITY_INFORMATION);
 
 	requestingSaclInfo = ((*SecurityInformation & SACL_SECURITY_INFORMATION) ||
 		(*SecurityInformation & BACKUP_SECURITY_INFORMATION));
@@ -1349,7 +1396,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
+static NTSTATUS DOKAN_CALLBACK EleFS2SetFileSecurity(
 	LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
 	PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
 	PDOKAN_FILE_INFO DokanFileInfo) {
@@ -1376,7 +1423,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
+static NTSTATUS DOKAN_CALLBACK EleFS2GetVolumeInformation(
 	LPWSTR VolumeNameBuffer, DWORD VolumeNameSize, LPDWORD VolumeSerialNumber,
 	LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
 	LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
@@ -1440,7 +1487,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
 
 // Uncomment the function and set dokanOperations.GetDiskFreeSpace to personalize disk space
 /*
-static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
+static NTSTATUS DOKAN_CALLBACK EleFS2DokanGetDiskFreeSpace(
 	PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
 	PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
   UNREFERENCED_PARAMETER(DokanFileInfo);
@@ -1453,7 +1500,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
 }
 */
 
-static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
+static NTSTATUS DOKAN_CALLBACK EleFS2DokanGetDiskFreeSpace(
 	PULONGLONG FreeBytesAvailable, PULONGLONG TotalNumberOfBytes,
 	PULONGLONG TotalNumberOfFreeBytes, PDOKAN_FILE_INFO DokanFileInfo) {
 	UNREFERENCED_PARAMETER(DokanFileInfo);
@@ -1487,7 +1534,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorDokanGetDiskFreeSpace(
 /**
  * Avoid #include <winternl.h> which as conflict with FILE_INFORMATION_CLASS
  * definition.
- * This only for MirrorFindStreams. Link with ntdll.lib still required.
+ * This only for EleFS2FindStreams. Link with ntdll.lib still required.
  *
  * Not needed if you're not using NtQueryInformationFile!
  *
@@ -1514,7 +1561,7 @@ NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
  */
 
 NTSTATUS DOKAN_CALLBACK
-MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
+EleFS2FindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE hFind;
@@ -1555,14 +1602,14 @@ MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK EleFS2Mounted(PDOKAN_FILE_INFO DokanFileInfo) {
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	DbgPrint(L"Mounted\n");
 	return STATUS_SUCCESS;
 }
 
-static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
+static NTSTATUS DOKAN_CALLBACK EleFS2Unmounted(PDOKAN_FILE_INFO DokanFileInfo) {
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	DbgPrint(L"Unmounted\n");
@@ -1588,8 +1635,9 @@ BOOL WINAPI CtrlHandler(DWORD dwCtrlType) {
 
 void ShowUsage() {
 	// clang-format off
-	fprintf(stderr, "mirror.exe - Mirror a local device or folder to secondary device, an NTFS folder or a network device.\n"
-		"  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to mirror.\n"
+	fprintf(stderr, "EleFS2.exe - EleFS2 a local device or folder to secondary device, an NTFS folder or a network device.\n"
+		"  /p Password/pass phrase etc. Must be before the /r option. (ex. /p thisIsMyDevicePassword) If there is no password then the device is not encrypted.\n"
+		"  /r RootDirectory (ex. /r c:\\test)\t\t Directory source to EleFS2.\n"
 		"  /l MountPoint (ex. /l m)\t\t\t Mount point. Can be M:\\ (drive letter) or empty NTFS folder C:\\mount\\dokan .\n"
 		"  /t ThreadCount (ex. /t 5)\t\t\t Number of threads to be used internally by Dokan library.\n\t\t\t\t\t\t More threads will handle more event at the same time.\n"
 		"  /d (enable debug output)\t\t\t Enable debug output to an attached debugger.\n"
@@ -1600,7 +1648,7 @@ void ShowUsage() {
 		"  /o (use mount manager)\t\t\t Register device to Windows mount manager.\n\t\t\t\t\t\t This enables advanced Windows features like recycle bin and more...\n"
 		"  /c (mount for current session only)\t\t Device only visible for current user session.\n"
 		"  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
-		"  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
+		//		"  /p (Impersonate Caller User)\t\t\t Impersonate Caller User when getting the handle in CreateFile for operations.\n\t\t\t\t\t\t This option requires administrator right to work properly.\n"
 		"  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
 		"  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
 		"  /f User mode Lock\t\t\t\t Enable Lockfile/Unlockfile operations. Otherwise Dokan will take care of it.\n"
@@ -1608,9 +1656,9 @@ void ShowUsage() {
 		"  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n"
 		"  /z Optimize single name search\t\t Speed up directory query under Windows 7.\n\n"
 		"Examples:\n"
-		"\tmirror.exe /r C:\\Users /l M:\t\t\t# Mirror C:\\Users as RootDirectory into a drive of letter M:\\.\n"
-		"\tmirror.exe /r C:\\Users /l C:\\mount\\dokan\t# Mirror C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
-		"\tmirror.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# Mirror C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
+		"\tEleFS2.exe /r C:\\Users /l M:\t\t\t# EleFS2 C:\\Users as RootDirectory into a drive of letter M:\\.\n"
+		"\tEleFS2.exe /r C:\\Users /l C:\\mount\\dokan\t# EleFS2 C:\\Users as RootDirectory into NTFS folder C:\\mount\\dokan.\n"
+		"\tEleFS2.exe /r C:\\Users /l M: /n /u \\myfs\\myfs1\t# EleFS2 C:\\Users as RootDirectory into a network drive M:\\. with UNC \\\\myfs\\myfs1\n\n"
 		"Unmount the drive with CTRL + C in the console or alternatively via \"dokanctl /u MountPoint\".\n");
 	// clang-format on
 }
@@ -1633,8 +1681,18 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 	dokanOptions.Version = DOKAN_VERSION;
 	dokanOptions.ThreadCount = 0; // use default
 
+	WCHAR *password = 0;
+
 	for (command = 1; command < argc; command++) {
 		switch (towlower(argv[command][1])) {
+		case 'p':
+			command++;
+			DbgPrint(L"Using encryption\n");
+			password = argv[command];
+
+			gUsingEncryption = true;
+			gMasterKey.Create(password, wcslen(password) * sizeof(WCHAR));
+			break;
 		case L'r':
 			command++;
 			wcscpy_s(RootDirectory, sizeof(RootDirectory) / sizeof(WCHAR),
@@ -1691,9 +1749,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 			dokanOptions.UNCName = UNCName;
 			DbgPrint(L"UNC Name: %ls\n", UNCName);
 			break;
-		case L'p':
-			g_ImpersonateCallerUser = TRUE;
-			break;
+			//		case L'p':
+			//			g_ImpersonateCallerUser = TRUE;
+			//			break;
 		case L'i':
 			command++;
 			dokanOptions.Timeout = (ULONG)_wtol(argv[command]);
@@ -1747,17 +1805,17 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 	g_HasSeSecurityPrivilege = AddSeSecurityNamePrivilege();
 	if (!g_HasSeSecurityPrivilege) {
 		fwprintf(stderr,
-			L"[Mirror] Failed to add security privilege to process\n"
+			L"[EleFS2] Failed to add security privilege to process\n"
 			L"\t=> GetFileSecurity/SetFileSecurity may not work properly\n"
-			L"\t=> Please restart mirror sample with administrator rights to fix it\n");
+			L"\t=> Please restart EleFS2 sample with administrator rights to fix it\n");
 	}
 
 	if (g_ImpersonateCallerUser && !g_HasSeSecurityPrivilege) {
 		fwprintf(
 			stderr,
-			L"[Mirror] Impersonate Caller User requires administrator right to work properly\n"
+			L"[EleFS2] Impersonate Caller User requires administrator right to work properly\n"
 			L"\t=> Other users may not use the drive properly\n"
-			L"\t=> Please restart mirror sample with administrator rights to fix it\n");
+			L"\t=> Please restart EleFS2 sample with administrator rights to fix it\n");
 	}
 
 	if (g_DebugMode) {
@@ -1770,31 +1828,31 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
 	dokanOptions.Options |= DOKAN_OPTION_ALT_STREAM;
 
 	ZeroMemory(&dokanOperations, sizeof(DOKAN_OPERATIONS));
-	dokanOperations.ZwCreateFile = MirrorCreateFile;
-	dokanOperations.Cleanup = MirrorCleanup;
-	dokanOperations.CloseFile = MirrorCloseFile;
-	dokanOperations.ReadFile = MirrorReadFile;
-	dokanOperations.WriteFile = MirrorWriteFile;
-	dokanOperations.FlushFileBuffers = MirrorFlushFileBuffers;
-	dokanOperations.GetFileInformation = MirrorGetFileInformation;
-	dokanOperations.FindFiles = MirrorFindFiles;
+	dokanOperations.ZwCreateFile = EleFS2CreateFile;
+	dokanOperations.Cleanup = EleFS2Cleanup;
+	dokanOperations.CloseFile = EleFS2CloseFile;
+	dokanOperations.ReadFile = EleFS2ReadFile;
+	dokanOperations.WriteFile = EleFS2WriteFile;
+	dokanOperations.FlushFileBuffers = EleFS2FlushFileBuffers;
+	dokanOperations.GetFileInformation = EleFS2GetFileInformation;
+	dokanOperations.FindFiles = EleFS2FindFiles;
 	dokanOperations.FindFilesWithPattern = NULL;
-	dokanOperations.SetFileAttributes = MirrorSetFileAttributes;
-	dokanOperations.SetFileTime = MirrorSetFileTime;
-	dokanOperations.DeleteFile = MirrorDeleteFile;
-	dokanOperations.DeleteDirectory = MirrorDeleteDirectory;
-	dokanOperations.MoveFile = MirrorMoveFile;
-	dokanOperations.SetEndOfFile = MirrorSetEndOfFile;
-	dokanOperations.SetAllocationSize = MirrorSetAllocationSize;
-	dokanOperations.LockFile = MirrorLockFile;
-	dokanOperations.UnlockFile = MirrorUnlockFile;
-	dokanOperations.GetFileSecurity = MirrorGetFileSecurity;
-	dokanOperations.SetFileSecurity = MirrorSetFileSecurity;
-	dokanOperations.GetDiskFreeSpace = MirrorDokanGetDiskFreeSpace;
-	dokanOperations.GetVolumeInformation = MirrorGetVolumeInformation;
-	dokanOperations.Unmounted = MirrorUnmounted;
-	dokanOperations.FindStreams = MirrorFindStreams;
-	dokanOperations.Mounted = MirrorMounted;
+	dokanOperations.SetFileAttributes = EleFS2SetFileAttributes;
+	dokanOperations.SetFileTime = EleFS2SetFileTime;
+	dokanOperations.DeleteFile = EleFS2DeleteFile;
+	dokanOperations.DeleteDirectory = EleFS2DeleteDirectory;
+	dokanOperations.MoveFile = EleFS2MoveFile;
+	dokanOperations.SetEndOfFile = EleFS2SetEndOfFile;
+	dokanOperations.SetAllocationSize = EleFS2SetAllocationSize;
+	dokanOperations.LockFile = EleFS2LockFile;
+	dokanOperations.UnlockFile = EleFS2UnlockFile;
+	dokanOperations.GetFileSecurity = EleFS2GetFileSecurity;
+	dokanOperations.SetFileSecurity = EleFS2SetFileSecurity;
+	dokanOperations.GetDiskFreeSpace = EleFS2DokanGetDiskFreeSpace;
+	dokanOperations.GetVolumeInformation = EleFS2GetVolumeInformation;
+	dokanOperations.Unmounted = EleFS2Unmounted;
+	dokanOperations.FindStreams = EleFS2FindStreams;
+	dokanOperations.Mounted = EleFS2Mounted;
 
 	status = DokanMain(&dokanOptions, &dokanOperations);
 	switch (status) {
