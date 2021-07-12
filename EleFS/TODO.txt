@@ -3,7 +3,18 @@
 	Use long key, 256 bytes?, based on key plus salt for each file, use file position eor file position shifted based on key size, to use for each byte eor
 		Pass-through all reads and writes using byte eor
 	Advantages, uses underlying file caching and doesn't have complexities of container file based
-	
+	* Test: EleFS2\RunTest.bat
+	* File contents encrption works: EleFS2ReadFile and EleFS2WriteFile using EncryptDecryptBuffer
+	* TODO: Encrypt file and directory names
+		Filename is going to need salt
+		EleFS2FindFiles
+		Perhaps a good place to start would be applying crypto to the path calculated by: GetFilePath ?
+			Be careful of UNC network paths?
+			Might need to validate each part is a file or directory?
+		FillFindData -> findData.cFileName contains "." or ".." or a single filename or directory name, perfect for de-encrypting and getting a salt value from
+			Perhaps _DOKAN_FILE_INFO->Context can be used for the salt found in the filename?
+
+
 
 
 

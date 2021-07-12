@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.1382
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EleFS", "EleFS\EleFS.vcxproj", "{2EB1E0E9-50A4-499C-8C20-396C67E48EDA}"
 	ProjectSection(ProjectDependencies) = postProject
 		{4EBB3C71-C64C-42C9-AF71-9F3DC21F1EAC} = {4EBB3C71-C64C-42C9-AF71-9F3DC21F1EAC}
@@ -20,6 +22,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestEleFSLib", "TestEleFSLi
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Mirror", "Mirror\Mirror.vcxproj", "{D344533A-182A-43B6-AAD5-BD3941AB9E4A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EleFS2", "EleFS2\EleFS2.vcxproj", "{D344533A-182A-43B6-AAD5-BD3941AB9E4B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,8 +51,15 @@ Global
 		{D344533A-182A-43B6-AAD5-BD3941AB9E4A}.Debug|Win32.Build.0 = Debug|Win32
 		{D344533A-182A-43B6-AAD5-BD3941AB9E4A}.Release|Win32.ActiveCfg = Release|Win32
 		{D344533A-182A-43B6-AAD5-BD3941AB9E4A}.Release|Win32.Build.0 = Release|Win32
+		{D344533A-182A-43B6-AAD5-BD3941AB9E4B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D344533A-182A-43B6-AAD5-BD3941AB9E4B}.Debug|Win32.Build.0 = Debug|Win32
+		{D344533A-182A-43B6-AAD5-BD3941AB9E4B}.Release|Win32.ActiveCfg = Release|Win32
+		{D344533A-182A-43B6-AAD5-BD3941AB9E4B}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FEBEBC6F-2267-4D1F-9CC9-00103CBF34EE}
 	EndGlobalSection
 EndGlobal
