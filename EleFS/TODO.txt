@@ -5,7 +5,7 @@
 	Advantages, uses underlying file caching and doesn't have complexities of container file based
 	* Test: EleFS2\RunTest.bat
 	* File contents encrption works: EleFS2ReadFile and EleFS2WriteFile using EncryptDecryptBuffer
-	* TODO: Encrypt file and directory names
+	* Done: Encrypt file and directory names
 		Filename is going to need salt
 		EleFS2FindFiles
 		Perhaps a good place to start would be applying crypto to the path calculated by: GetFilePath ?
@@ -18,9 +18,24 @@
 				This is because a salted filename will constantly change and needs intensive scanning to find
 					Which would be slow
 				Could use an internal cache of the path?
-
-
-
+	* Done: Rename needs to preserve the used salt from the previous file name (since it's used in the data) to the new target name, hmm :)
+	* Seems to all work, however directory name length is an issue since hex encoding is not efficient...
+		EleFS2.exe has triggered a breakpoint. occurred
+		wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
+			From: GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
+		Usng "#define WIN10_ENABLE_LONG_PATH" doesn't seem to fix the issue entierly. RunTest.bat reports:
+			Only in c:\ReplicaNet\ReplicaNetPublic\Includes/RNLobby/Inc: AdvertiseClient.h
+			Only in c:\ReplicaNet\ReplicaNetPublic\Includes/RNLobby/Inc: AdvertiseServer.h
+			Only in c:\ReplicaNet\ReplicaNetPublic\Includes/RNLobby/Inc: BaseTransportServer.h
+			... etc ...
+		Which implies that a create file, or filename parsing is going wrong somewhere?
+		* Reducing the header length helps a lot, but still it's quite limited...
+		* Obviously using something better than hex will help...
+			* TODO: Test the mirror sample, see if WIN10_ENABLE_LONG_PATH really works with very long copy paths
+			* TODO: Try base64
+			* TODO: Try compression? :)
+	* TODO: Caching: GetFilePath() return theSalt and the "filePath" from the "FileName" key, to avoid all the expensive lookups for salt calculation and only when "saltSet = false"
+		If the saltSet = true then obviously we want to run the expensive code to set the salt properly for the new directory/filename
 
 
 

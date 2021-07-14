@@ -35,9 +35,14 @@ THE SOFTWARE.
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <winbase.h>
 #include <sddl.h>
+#include <string>
+#include <codecvt>
+#include <locale>
 #include "RNPlatform/Inc/Encryption.h"
+#include "RNPlatform/Inc/MessageHelper.h"
 
 
 //#define WIN10_ENABLE_LONG_PATH
@@ -104,19 +109,205 @@ static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
 
-static void GetFilePath(PWCHAR filePath, ULONG numberOfElements,
-	LPCWSTR FileName) {
+static void GetFilePathInternal(PWCHAR filePath, ULONG numberOfElements, LPCWSTR FileName)
+{
 	wcsncpy_s(filePath, numberOfElements, RootDirectory, wcslen(RootDirectory));
 	size_t unclen = wcslen(UNCName);
-	if (unclen > 0 && _wcsnicmp(FileName, UNCName, unclen) == 0) {
-		if (_wcsnicmp(FileName + unclen, L".", 1) != 0) {
+	if (unclen > 0 && _wcsnicmp(FileName, UNCName, unclen) == 0)
+	{
+		if (_wcsnicmp(FileName + unclen, L".", 1) != 0)
+		{
 			wcsncat_s(filePath, numberOfElements, FileName + unclen,
 				wcslen(FileName) - unclen);
 		}
 	}
-	else {
+	else
+	{
 		wcsncat_s(filePath, numberOfElements, FileName, wcslen(FileName));
 	}
+}
+
+static int sSalt = (int)time(0);
+
+using convert_t = std::codecvt_utf8<wchar_t>;
+std::wstring_convert<convert_t, wchar_t> strconverter;
+
+std::string to_string(const std::wstring &wstr)
+{
+	return strconverter.to_bytes(wstr);
+}
+
+std::wstring to_wstring(const std::string &str)
+{
+	return strconverter.from_bytes(str);
+}
+
+static const int kHeaderSize = 2 * sizeof(int);
+
+static void GetFilePath(PWCHAR filePath, ULONG numberOfElements, LPCWSTR FileName, int &theSalt, bool saltSet = false)
+{
+	if (!gUsingEncryption)
+	{
+		GetFilePathInternal(filePath, numberOfElements, FileName);
+		return;
+	}
+
+	if (!saltSet)
+	{
+		theSalt = sSalt;
+	}
+	sSalt += rand();
+
+	std::wstring rebuiltPath;
+	WCHAR workingPath[DOKAN_MAX_PATH];
+	wcscpy(workingPath, FileName);
+
+	// The final output path using encrypted names
+	std::wstring buildingPath;
+
+
+	bool lastFileFound = false;
+	wchar_t *workingPtr;
+	wchar_t *tok = std::wcstok(workingPath, L"\\", &workingPtr);
+	while (tok != 0)
+	{
+		std::wstring realFilenameTok = tok;
+		std::wstring realStreamTok;
+		size_t pos = realFilenameTok.find_first_of(':');
+		if (pos != std::wstring::npos)
+		{
+			realStreamTok = realFilenameTok.substr(pos);
+			realFilenameTok = realFilenameTok.substr(0, pos);
+		}
+
+		std::wstring buildingPathScan = buildingPath;
+		lastFileFound = false;
+
+		buildingPathScan += L"\\*";
+
+		WCHAR tempWorkingPath[DOKAN_MAX_PATH];
+		GetFilePathInternal(tempWorkingPath, DOKAN_MAX_PATH, buildingPathScan.c_str());
+
+		// Loop through available files/directories to ty to find a matching one
+		WIN32_FIND_DATAW findData;
+		HANDLE hFind = FindFirstFile(tempWorkingPath, &findData);
+
+		if (hFind != INVALID_HANDLE_VALUE)
+		{
+			do
+			{
+				std::wstring realFilename = findData.cFileName;
+				std::wstring realStream;
+				size_t pos = realFilename.find_first_of(':');
+				if (pos != std::wstring::npos)
+				{
+					realStream = realFilename.substr(pos);
+					realFilename = realFilename.substr(0, pos);
+				}
+
+				RNReplicaNet::DynamicMessageHelper encryptedData;
+				encryptedData.ReadAsHex(to_string(realFilename));
+				if (encryptedData.GetSize() >= (kHeaderSize + sizeof(wchar_t)))
+				{
+					RNReplicaNet::DynamicMessageHelper encryptedDataHeader(encryptedData.GetBuffer(), kHeaderSize);
+					RNReplicaNet::DynamicMessageHelper encryptedDataFilename(((char*)encryptedData.GetBuffer()) + kHeaderSize , encryptedData.GetSize() - kHeaderSize);
+
+					RNReplicaNet::Encryption::Decrypt(encryptedDataHeader.GetBuffer(), encryptedDataHeader.GetSize(), &gMasterKey);
+					encryptedDataHeader.SetSize(0);
+					int saltTemp;
+					// Ignore the first integer
+//					encryptedDataHeader >> saltTemp;
+					// This is the real salt
+					encryptedDataHeader >> saltTemp;
+					if (!saltSet)
+					{
+						theSalt = saltTemp;
+					}
+
+					int cLen;
+					encryptedDataHeader >> cLen;
+
+					assert(kHeaderSize == encryptedDataHeader.GetSize());
+
+					RNReplicaNet::Encryption::Key newKey;
+					newKey.Create(gMasterKey.mKey, sizeof(gMasterKey));
+					newKey.AddCrypto(saltTemp);
+					RNReplicaNet::Encryption::Decrypt(encryptedDataFilename.GetBuffer(), encryptedDataFilename.GetSize(), &newKey);
+					std::wstring decryptedName((WCHAR*)encryptedDataFilename.GetBuffer(), (size_t)cLen);
+
+					if (lstrcmpiW(decryptedName.c_str(), realFilenameTok.c_str()) == 0)
+					{
+						// The decrypted filename matched so add it
+						lastFileFound = true;
+						buildingPath += '\\';
+						buildingPath += realFilename;
+						// Include the real requested stream, since FindFirstFile only enumerates filenames not filename plus streams
+						buildingPath += realStreamTok;
+						break;
+					}
+				}
+
+			} while (FindNextFile(hFind, &findData) != 0);
+
+			FindClose(hFind);
+		}
+
+		// If there was no match, then create a potential new encrypted filename
+		if (!lastFileFound)
+		{
+			std::wstring realFilename(tok);
+			std::wstring realStream;
+			size_t pos = realFilename.find_first_of(':');
+			if (pos != std::wstring::npos)
+			{
+				realStream = realFilename.substr(pos);
+				realFilename = realFilename.substr(0 , pos);
+			}
+
+			// Need to create a new name with a new salt
+			if (!saltSet)
+			{
+				theSalt = sSalt;
+			}
+			sSalt += rand();
+
+			RNReplicaNet::DynamicMessageHelper tempMessage;
+			// Just some randomness
+//			tempMessage << (int)rand();
+			// Then the salt
+			tempMessage << theSalt;
+			int cLen = (int)realFilename.length();
+			tempMessage << cLen;
+
+			assert(kHeaderSize == tempMessage.GetSize());
+
+			RNReplicaNet::DynamicMessageHelper tempMessage2;
+			tempMessage2.AddData(realFilename.c_str(), cLen * sizeof(wchar_t));
+/*
+			// Add a bit of random length, for good measure
+			int t = rand() & 7;
+			while (t-- > 0)
+			{
+				tempMessage2 << (char) rand();
+			}
+*/
+			RNReplicaNet::Encryption::Encrypt(tempMessage.GetBuffer(), tempMessage.GetSize(), &gMasterKey);
+			RNReplicaNet::Encryption::Key newKey;
+			newKey.Create(gMasterKey.mKey, sizeof(gMasterKey));
+			newKey.AddCrypto(theSalt);
+			RNReplicaNet::Encryption::Encrypt(tempMessage2.GetBuffer(), tempMessage2.GetSize(), &newKey);
+
+			std::string encryptedFileName = tempMessage.DumpAsHex(false) + tempMessage2.DumpAsHex(false);
+
+			buildingPath += '\\';
+			buildingPath += to_wstring(encryptedFileName) + realStream;
+		}
+
+		tok = wcstok(0, L"\\", &workingPtr);
+	}
+
+	// Need to return the mangled path here
+	GetFilePathInternal(filePath, DOKAN_MAX_PATH, buildingPath.c_str());
 }
 
 static void PrintUserName(PDOKAN_FILE_INFO DokanFileInfo) {
@@ -247,7 +438,8 @@ EleFS2CreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 		DesiredAccess, FileAttributes, CreateOptions, CreateDisposition,
 		&genericDesiredAccess, &fileAttributesAndFlags, &creationDisposition);
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"CreateFile : %s\n", filePath);
 
@@ -545,7 +737,9 @@ EleFS2CreateFile(LPCWSTR FileName, PDOKAN_IO_SECURITY_CONTEXT SecurityContext,
 static void DOKAN_CALLBACK EleFS2CloseFile(LPCWSTR FileName,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	if (DokanFileInfo->Context) {
 		DbgPrint(L"CloseFile: %s\n", filePath);
@@ -561,7 +755,9 @@ static void DOKAN_CALLBACK EleFS2CloseFile(LPCWSTR FileName,
 static void DOKAN_CALLBACK EleFS2Cleanup(LPCWSTR FileName,
 	PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	if (DokanFileInfo->Context) {
 		DbgPrint(L"Cleanup: %s\n\n", filePath);
@@ -616,7 +812,7 @@ static void printHexDump(unsigned char *buffer, size_t length)
 	printf("\n");
 }
 
-static void EncryptDecryptBuffer(LPCVOID Buffer, LPVOID DestinationBuffer, DWORD BufferLength, LONGLONG Offset)
+static void EncryptDecryptBuffer(LPCVOID Buffer, LPVOID DestinationBuffer, DWORD BufferLength, LONGLONG Offset , int theSalt)
 {
 	if (!gUsingEncryption)
 	{
@@ -627,12 +823,16 @@ static void EncryptDecryptBuffer(LPCVOID Buffer, LPVOID DestinationBuffer, DWORD
 		return;
 	}
 
+	RNReplicaNet::Encryption::Key newKey;
+	newKey.Create(gMasterKey.mKey, sizeof(gMasterKey));
+	newKey.AddCrypto(theSalt);
+
 	DWORD i = 0;
 	while (i < BufferLength)
 	{
 		int safeKeyIndex = Offset % RNReplicaNet::kEncryptionKeyLengthBytes;
 
-		((unsigned char*)DestinationBuffer)[i] = (unsigned char)(((unsigned char*)Buffer)[i] ^ (Offset) ^ (Offset >> 8) ^ (Offset >> 16) ^ (Offset >> 24) ^ gMasterKey.mKey[safeKeyIndex]);
+		((unsigned char*)DestinationBuffer)[i] = (unsigned char)(((unsigned char*)Buffer)[i] ^ (Offset) ^ (Offset >> 8) ^ (Offset >> 16) ^ (Offset >> 24) ^ newKey.mKey[safeKeyIndex]);
 
 		Offset++;
 		i++;
@@ -649,7 +849,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2ReadFile(LPCWSTR FileName, LPVOID Buffer,
 	ULONG offset = (ULONG)Offset;
 	BOOL opened = FALSE;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"ReadFile : %s\n", filePath);
 
@@ -691,7 +892,7 @@ static NTSTATUS DOKAN_CALLBACK EleFS2ReadFile(LPCWSTR FileName, LPVOID Buffer,
 	}
 
 	// In place decryption
-	EncryptDecryptBuffer(Buffer, Buffer, *ReadLength, Offset);
+	EncryptDecryptBuffer(Buffer, Buffer, *ReadLength, Offset , theSalt);
 
 	if (opened)
 		CloseHandle(handle);
@@ -708,7 +909,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2WriteFile(LPCWSTR FileName, LPCVOID Buffer,
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 	BOOL opened = FALSE;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"WriteFile : %s, offset %I64d, length %d\n", filePath, Offset,
 		NumberOfBytesToWrite);
@@ -794,7 +996,7 @@ static NTSTATUS DOKAN_CALLBACK EleFS2WriteFile(LPCWSTR FileName, LPCVOID Buffer,
 	if (gUsingEncryption)
 	{
 		realBuffer = HeapAlloc(GetProcessHeap(), 0, NumberOfBytesToWrite);
-		EncryptDecryptBuffer(Buffer, realBuffer, NumberOfBytesToWrite, Offset);
+		EncryptDecryptBuffer(Buffer, realBuffer, NumberOfBytesToWrite, Offset , theSalt);
 	}
 
 	if (!WriteFile(handle, realBuffer, NumberOfBytesToWrite, NumberOfBytesWritten,
@@ -834,7 +1036,8 @@ EleFS2FlushFileBuffers(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"FlushFileBuffers : %s\n", filePath);
 
@@ -860,7 +1063,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2GetFileInformation(
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 	BOOL opened = FALSE;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"GetFileInfo : %s\n", filePath);
 
@@ -931,7 +1135,8 @@ EleFS2FindFiles(LPCWSTR FileName,
 	DWORD error;
 	int count = 0;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"FindFiles : %s\n", filePath);
 
@@ -957,6 +1162,49 @@ EleFS2FindFiles(LPCWSTR FileName,
 	do {
 		if (!rootFolder || (wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0))
 		{
+			if (gUsingEncryption)
+			{
+				std::wstring realFilename = findData.cFileName;
+				std::wstring realStream;
+				size_t pos = realFilename.find_first_of(':');
+				if (pos != std::wstring::npos)
+				{
+					realStream = realFilename.substr(pos);
+					realFilename = realFilename.substr(0, pos);
+				}
+
+				// Yes this is a bit of copy paste from GetFilePath()
+				RNReplicaNet::DynamicMessageHelper encryptedData;
+				encryptedData.ReadAsHex(to_string(realFilename));
+				if (encryptedData.GetSize() >= (kHeaderSize + sizeof(wchar_t)))
+				{
+					RNReplicaNet::DynamicMessageHelper encryptedDataHeader(encryptedData.GetBuffer(), kHeaderSize);
+					RNReplicaNet::DynamicMessageHelper encryptedDataFilename(((char*)encryptedData.GetBuffer()) + kHeaderSize, encryptedData.GetSize() - kHeaderSize);
+
+					RNReplicaNet::Encryption::Decrypt(encryptedDataHeader.GetBuffer(), encryptedDataHeader.GetSize(), &gMasterKey);
+					encryptedDataHeader.SetSize(0);
+					int saltTemp;
+					// Ignore the first integer
+//					encryptedDataHeader >> saltTemp;
+					// This is the real salt
+					encryptedDataHeader >> saltTemp;
+					theSalt = saltTemp;
+
+					int cLen;
+					encryptedDataHeader >> cLen;
+
+					assert(kHeaderSize == encryptedDataHeader.GetSize());
+
+					RNReplicaNet::Encryption::Key newKey;
+					newKey.Create(gMasterKey.mKey, sizeof(gMasterKey));
+					newKey.AddCrypto(saltTemp);
+					RNReplicaNet::Encryption::Decrypt(encryptedDataFilename.GetBuffer(), encryptedDataFilename.GetSize(), &newKey);
+					std::wstring decryptedName((WCHAR*)encryptedDataFilename.GetBuffer(), (size_t)cLen);
+
+					wcsncpy(findData.cFileName, decryptedName.c_str(), MAX_PATH);
+				}
+			}
+
 			FillFindData(&findData, DokanFileInfo);
 		}
 		count++;
@@ -980,7 +1228,8 @@ EleFS2DeleteFile(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle = (HANDLE)DokanFileInfo->Context;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 	DbgPrint(L"DeleteFile %s - %d\n", filePath, DokanFileInfo->DeleteOnClose);
 
 	DWORD dwAttrib = GetFileAttributes(filePath);
@@ -1009,7 +1258,8 @@ EleFS2DeleteDirectory(LPCWSTR FileName, PDOKAN_FILE_INFO DokanFileInfo) {
 	size_t fileLen;
 
 	ZeroMemory(filePath, sizeof(filePath));
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"DeleteDirectory %s - %d\n", filePath,
 		DokanFileInfo->DeleteOnClose);
@@ -1069,8 +1319,9 @@ EleFS2MoveFile(LPCWSTR FileName, // existing file name
 
 	PFILE_RENAME_INFO renameInfo = NULL;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
-	GetFilePath(newFilePath, DOKAN_MAX_PATH, NewFileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
+	GetFilePath(newFilePath, DOKAN_MAX_PATH, NewFileName , theSalt , true);
 
 	DbgPrint(L"MoveFile %s -> %s\n\n", filePath, newFilePath);
 	handle = (HANDLE)DokanFileInfo->Context;
@@ -1129,7 +1380,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2LockFile(LPCWSTR FileName,
 	LARGE_INTEGER offset;
 	LARGE_INTEGER length;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"LockFile %s\n", filePath);
 
@@ -1159,7 +1411,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2SetEndOfFile(
 	HANDLE handle;
 	LARGE_INTEGER offset;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"SetEndOfFile %s, %I64d\n", filePath, ByteOffset);
 
@@ -1192,7 +1445,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2SetAllocationSize(
 	HANDLE handle;
 	LARGE_INTEGER fileSize;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"SetAllocationSize %s, %I64d\n", filePath, AllocSize);
 
@@ -1233,7 +1487,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2SetFileAttributes(
 
 	WCHAR filePath[DOKAN_MAX_PATH];
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"SetFileAttributes %s 0x%x\n", filePath, FileAttributes);
 
@@ -1263,7 +1518,8 @@ EleFS2SetFileTime(LPCWSTR FileName, CONST FILETIME *CreationTime,
 	WCHAR filePath[DOKAN_MAX_PATH];
 	HANDLE handle;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"SetFileTime %s\n", filePath);
 
@@ -1292,7 +1548,8 @@ EleFS2UnlockFile(LPCWSTR FileName, LONGLONG ByteOffset, LONGLONG Length,
 	LARGE_INTEGER length;
 	LARGE_INTEGER offset;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"UnlockFile %s\n", filePath);
 
@@ -1325,7 +1582,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2GetFileSecurity(
 
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"GetFileSecurity %s\n", filePath);
 
@@ -1407,7 +1665,8 @@ static NTSTATUS DOKAN_CALLBACK EleFS2SetFileSecurity(
 
 	UNREFERENCED_PARAMETER(SecurityDescriptorLength);
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"SetFileSecurity %s\n", filePath);
 
@@ -1571,7 +1830,8 @@ EleFS2FindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 	DWORD error;
 	int count = 0;
 
-	GetFilePath(filePath, DOKAN_MAX_PATH, FileName);
+	int theSalt = 0;
+	GetFilePath(filePath, DOKAN_MAX_PATH, FileName , theSalt);
 
 	DbgPrint(L"FindStreams :%s\n", filePath);
 
@@ -1666,6 +1926,7 @@ void ShowUsage() {
 }
 
 int __cdecl wmain(ULONG argc, PWCHAR argv[]) {
+	srand((int)time(0));
 	int status;
 	ULONG command;
 	DOKAN_OPERATIONS dokanOperations;
