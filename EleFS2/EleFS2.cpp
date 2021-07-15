@@ -142,7 +142,7 @@ std::wstring to_wstring(const std::string &str)
 	return strconverter.from_bytes(str);
 }
 
-static const int kHeaderSize = 2 * sizeof(int);
+static const int kHeaderSize = 1 * sizeof(int);
 
 static void GetFilePath(PWCHAR filePath, ULONG numberOfElements, LPCWSTR FileName, int &theSalt, bool saltSet = false)
 {
@@ -224,8 +224,8 @@ static void GetFilePath(PWCHAR filePath, ULONG numberOfElements, LPCWSTR FileNam
 						theSalt = saltTemp;
 					}
 
-					int cLen;
-					encryptedDataHeader >> cLen;
+					int cLen = encryptedDataFilename.GetSize() / sizeof(wchar_t);
+//					encryptedDataHeader >> cLen;
 
 					assert(kHeaderSize == encryptedDataHeader.GetSize());
 
@@ -277,7 +277,7 @@ static void GetFilePath(PWCHAR filePath, ULONG numberOfElements, LPCWSTR FileNam
 			// Then the salt
 			tempMessage << theSalt;
 			int cLen = (int)realFilename.length();
-			tempMessage << cLen;
+//			tempMessage << cLen;
 
 			assert(kHeaderSize == tempMessage.GetSize());
 
@@ -1190,8 +1190,8 @@ EleFS2FindFiles(LPCWSTR FileName,
 					encryptedDataHeader >> saltTemp;
 					theSalt = saltTemp;
 
-					int cLen;
-					encryptedDataHeader >> cLen;
+					int cLen = encryptedDataFilename.GetSize() / sizeof(wchar_t);
+//					encryptedDataHeader >> cLen;
 
 					assert(kHeaderSize == encryptedDataHeader.GetSize());
 

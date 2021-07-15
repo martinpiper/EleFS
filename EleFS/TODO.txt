@@ -36,7 +36,7 @@
 			* TODO: Try compression? :)
 	* TODO: Caching: GetFilePath() return theSalt and the "filePath" from the "FileName" key, to avoid all the expensive lookups for salt calculation and only when "saltSet = false"
 		If the saltSet = true then obviously we want to run the expensive code to set the salt properly for the new directory/filename
-
+	* Done: Reduce to just salt, don't need length
 
 
 
