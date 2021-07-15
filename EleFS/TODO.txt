@@ -34,6 +34,8 @@
 			* TODO: Test the mirror sample, see if WIN10_ENABLE_LONG_PATH really works with very long copy paths
 			* TODO: Try base64
 			* TODO: Try compression? :)
+				XPCompression really doesn't generate savings, it's not optimised for short text strings
+				However this might be better: https://github.com/siara-cc/Unishox
 	* TODO: Caching: GetFilePath() return theSalt and the "filePath" from the "FileName" key, to avoid all the expensive lookups for salt calculation and only when "saltSet = false"
 		If the saltSet = true then obviously we want to run the expensive code to set the salt properly for the new directory/filename
 	* Done: Reduce to just salt, don't need length
