@@ -4,6 +4,8 @@ Options:
 /f C:\temp\container.EleFs /l M:\ /m
 /p cryptoPassword /f C:\temp\container.EleFs /l M:\ /s /d /m
 /p cryptoPassword /f C:\temp\container.EleFs /l M:\ /m
+/p cryptoPassword /f E:\temp\container.EleFs /l M:\ /d /s /t 1 /m
+/p cryptoPassword /f E:\temp\container.EleFs /l M:\ /d /s /t 5 /m
 */
 
 #define WIN32_NO_STATUS
@@ -24,11 +26,55 @@ using namespace EleFSLib;
 
 BOOL g_UseStdErr;
 BOOL g_DebugMode;
+BOOL gTimeOperations;
+
 
 
 #pragma comment( lib, "dokan1.lib" )
 #pragma comment( lib, "EleFSLib.lib" )
 
+#include "RNPlatform/Inc/SysTime.h"
+class AutoTimeOperation : RNReplicaNet::SysTime
+{
+public:
+	AutoTimeOperation(const char *text) : mText(text)
+	{
+	}
+
+	virtual ~AutoTimeOperation()
+	{
+		if (gTimeOperations)
+		{
+			RNReplicaNet::SysTimeType theTime = FloatTime();
+			if (theTime < 5.0f)
+			{
+				printf("Thread %d : Time %f : %s\n", GetCurrentThreadId(), theTime, mText);
+			}
+			else
+			{
+				printf("Thread %d : ***Time*** %f : %s\n", GetCurrentThreadId(), theTime, mText);
+			}
+		}
+	}
+
+	void displayTimeToHere(const char *text)
+	{
+		RNReplicaNet::SysTimeType theTime = FloatTime();
+		if (theTime < 5.0f)
+		{
+			printf("Thread %d : Time Until %s %f : %s\n", GetCurrentThreadId(), text, theTime, mText);
+		}
+		else
+		{
+			printf("Thread %d : ***Time*** Until %s %f : %s\n", GetCurrentThreadId(), text, theTime, mText);
+		}
+	}
+
+	const char *mText;
+	time_t mStartTime;
+};
+#define TIMEOPERATION(s) AutoTimeOperation _timer(s);
+#define TIMEOPERATIONUNTILHERE(s) _timer.displayTimeToHere(s);
 
 static void DbgPrint(LPCWSTR format, ...)
 {
@@ -185,6 +231,7 @@ static NTSTATUS DOKAN_CALLBACK
 	ULONG ShareAccess, ULONG CreateDisposition,
 	ULONG CreateOptions, PDOKAN_FILE_INFO DokanFileInfo)
 {
+	TIMEOPERATION("MirrorCreateFile");
 	EleFS::File* handle;
 	NTSTATUS status = STATUS_SUCCESS;
 	DWORD creationDisposition;
@@ -273,6 +320,7 @@ static NTSTATUS DOKAN_CALLBACK
 	if (rootFolder)
 	{
 		DokanFileInfo->IsDirectory = TRUE;
+		DbgPrint(L"\tIs root directory\n");
 	}
 
 	DbgPrint(L"\tFlagsAndAttributes = 0x%x\n", fileAttributesAndFlags);
@@ -391,6 +439,7 @@ static void DOKAN_CALLBACK
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
+	TIMEOPERATION("MirrorCloseFile");
 	SetLastError(ERROR_SUCCESS);
 	if (DokanFileInfo->Context)
 	{
@@ -416,6 +465,7 @@ static void DOKAN_CALLBACK
 	LPCWSTR					FileName,
 	PDOKAN_FILE_INFO		DokanFileInfo)
 {
+	TIMEOPERATION("MirrorCleanup");
 	if (DokanFileInfo->Context)
 	{
 		DbgPrint(L"Cleanup: %s\n\n", FileName);
@@ -513,6 +563,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorReadFile(LPCWSTR FileName, LPVOID Buffer,
 											  LONGLONG Offset,
 											  PDOKAN_FILE_INFO DokanFileInfo)
 {
+	TIMEOPERATION("MirrorReadFile");
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
@@ -560,6 +611,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LONGLONG			Offset,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorWriteFile");
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
@@ -603,6 +655,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LPCWSTR		FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorFlushFileBuffers");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"FlushFileBuffers : %s\n", FileName);
@@ -622,6 +675,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LPBY_HANDLE_FILE_INFORMATION	HandleFileInformation,
 	PDOKAN_FILE_INFO				DokanFileInfo)
 {
+	TIMEOPERATION("MirrorGetFileInformation");
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
@@ -629,15 +683,19 @@ static NTSTATUS DOKAN_CALLBACK
 
 	if (!handle || handle == INVALID_HANDLE_VALUE)
 	{
+		TIMEOPERATIONUNTILHERE("before FileOpen");
 		handle = sFS.FileOpen(FileName,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL);
+		TIMEOPERATIONUNTILHERE("after FileOpen");
 		if (!handle || handle == INVALID_HANDLE_VALUE)
 		{
 			DbgPrint(L"\tinvalid handle, cleanuped?\n");
 			return DokanNtStatusFromWin32(ERROR_INVALID_FUNCTION);
 		}
 		closer.SetFile(handle);
+		TIMEOPERATIONUNTILHERE("after SetFile");
 	}
 
+	TIMEOPERATIONUNTILHERE("before GetFileInformation");
 	if (!sFS.GetFileInformation(handle,HandleFileInformation)) {
 		DbgPrint(L"\terror code = %d\n", GetLastError());
 	} else {
@@ -661,6 +719,7 @@ static NTSTATUS DOKAN_CALLBACK
 	}
 
 	DbgPrint(L"\n");
+	TIMEOPERATIONUNTILHERE("after GetFileInformation");
 
 	return STATUS_SUCCESS;
 }
@@ -698,6 +757,7 @@ void __cdecl sShellThread(void *)
 	while (true)
 	{
 		Sleep(10000);
+		TIMEOPERATION("sShellThread");
 		time_t theTime;
 		time(&theTime);
 		LOCK(&sRecentFolderListLock);
@@ -726,6 +786,7 @@ static NTSTATUS DOKAN_CALLBACK
 	PFillFindData		FillFindData, // function pointer
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorFindFiles");
 	HANDLE				hFind;
 	WIN32_FIND_DATAW	findData;
 	DWORD				error;
@@ -791,6 +852,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorDeleteFile");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"DeleteFile %s\n", FileName);
@@ -808,6 +870,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LPCWSTR				FileName,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorDeleteDirectory");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"DeleteDirectory %s\n", FileName);
@@ -826,6 +889,7 @@ static NTSTATUS DOKAN_CALLBACK
 	BOOL				ReplaceIfExisting,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorMoveFile");
 	DbgPrint(L"MoveFile %s -> %s\n\n", FileName, NewFileName);
 
 	if (ReplaceIfExisting)
@@ -855,6 +919,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LONGLONG			Length,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorLockFile");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"LockFile %s\n", FileName);
@@ -888,6 +953,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LONGLONG			ByteOffset,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorSetEndOfFile");
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
@@ -923,6 +989,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LONGLONG			AllocSize,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorSetAllocationSize");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"SetAllocationSize %s, %I64d\n", FileName, AllocSize);
@@ -963,6 +1030,7 @@ static NTSTATUS DOKAN_CALLBACK
 	DWORD				FileAttributes,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorSetFileAttributes");
 	// Ignore blank file attributes being set
 	if (!FileAttributes)
 	{
@@ -990,6 +1058,7 @@ static NTSTATUS DOKAN_CALLBACK
 	CONST FILETIME*		LastWriteTime,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorSetFileTime");
 	AutoCloseFile closer;
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
@@ -1026,6 +1095,7 @@ static NTSTATUS DOKAN_CALLBACK
 	LONGLONG			Length,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorUnlockFile");
 	EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
 
 	DbgPrint(L"UnlockFile %s\n", FileName);
@@ -1057,6 +1127,7 @@ static NTSTATUS DOKAN_CALLBACK
 	PULONGLONG			TotalNumberOfFreeBytes,
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorGetDiskFreeSpace");
 	// Some sensible defaults if the disk free space code doesn't work
 	*FreeBytesAvailable = (ULONGLONG)512* (ULONGLONG)1024* (ULONGLONG)1024* (ULONGLONG)1024;
 	*TotalNumberOfBytes = (ULONGLONG)1024* (ULONGLONG)1024* (ULONGLONG)1024 * (ULONGLONG)1024;
@@ -1097,6 +1168,7 @@ static int DOKAN_CALLBACK
 	MirrorUnmount(
 	PDOKAN_FILE_INFO	DokanFileInfo)
 {
+	TIMEOPERATION("MirrorUnmount");
 	DbgPrint(L"Unmount\n");
 	return 0;
 }
@@ -1105,6 +1177,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileSecurity(
 	PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG BufferLength,
 	PULONG LengthNeeded, PDOKAN_FILE_INFO DokanFileInfo)
 {
+	TIMEOPERATION("MirrorGetFileSecurity");
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	AutoCloseFile closer;
@@ -1287,7 +1360,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorSetFileSecurity(
 	LPCWSTR FileName, PSECURITY_INFORMATION SecurityInformation,
 	PSECURITY_DESCRIPTOR SecurityDescriptor, ULONG SecurityDescriptorLength,
 	PDOKAN_FILE_INFO DokanFileInfo) {
-		UNREFERENCED_PARAMETER(SecurityDescriptorLength);
+	TIMEOPERATION("MirrorSetFileSecurity");
+	UNREFERENCED_PARAMETER(SecurityDescriptorLength);
 
 		AutoCloseFile closer;
 		EleFSLib::EleFS::File *handle = (EleFSLib::EleFS::File *)DokanFileInfo->Context;
@@ -1320,7 +1394,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetVolumeInformation(
 	LPDWORD MaximumComponentLength, LPDWORD FileSystemFlags,
 	LPWSTR FileSystemNameBuffer, DWORD FileSystemNameSize,
 	PDOKAN_FILE_INFO DokanFileInfo) {
-		UNREFERENCED_PARAMETER(DokanFileInfo);
+	TIMEOPERATION("MirrorGetVolumeInformation");
+	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 		wcscpy_s(VolumeNameBuffer, VolumeNameSize, L"EleFS");
 		*VolumeSerialNumber = 0x19831116;
@@ -1383,7 +1458,8 @@ NTSYSCALLAPI NTSTATUS NTAPI NtQueryInformationFile(
 NTSTATUS DOKAN_CALLBACK
 	MirrorFindStreams(LPCWSTR FileName, PFillFindStreamData FillFindStreamData,
 	PDOKAN_FILE_INFO DokanFileInfo) {
-		HANDLE hFind;
+	TIMEOPERATION("MirrorFindStreams");
+	HANDLE hFind;
 		WIN32_FIND_STREAM_DATA findData;
 		DWORD error;
 		int count = 0;
@@ -1420,6 +1496,7 @@ NTSTATUS DOKAN_CALLBACK
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
+	TIMEOPERATION("MirrorMounted");
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	DbgPrint(L"Mounted\n");
@@ -1427,6 +1504,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorMounted(PDOKAN_FILE_INFO DokanFileInfo) {
 }
 
 static NTSTATUS DOKAN_CALLBACK MirrorUnmounted(PDOKAN_FILE_INFO DokanFileInfo) {
+	TIMEOPERATION("MirrorUnmounted");
 	UNREFERENCED_PARAMETER(DokanFileInfo);
 
 	DbgPrint(L"Unmounted\n");
@@ -1466,6 +1544,7 @@ void ShowUsage() {
 		"  /u (UNC provider name ex. \\localhost\\myfs)\t UNC name used for network volume.\n"
 		"  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
 		"  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
+		"  /r \t\t\t Profile timing for each operation.\n"
 		"  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
 		"Examples:\n"
 		"\tEleFS.exe /p devicePassword /f C:\\Temp\\container.EleFS /l M:\t\t\t# Mount C:\\Temp\\container.EleFS as RootDirectory into a drive of letter M:\\.\n"
@@ -1505,6 +1584,7 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 
 	g_DebugMode = FALSE;
 	g_UseStdErr = FALSE;
+	gTimeOperations = FALSE;
 
 	ZeroMemory(dokanOptions, sizeof(DOKAN_OPTIONS));
 	dokanOptions->Version = DOKAN_VERSION;
@@ -1516,6 +1596,9 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 	{
 		switch (towlower(argv[command][1]))
 		{
+		case 'r':
+			gTimeOperations = TRUE;
+			break;
 		case 'p':
 			command++;
 			DbgPrint(L"Using encryption\n");

@@ -1,3 +1,54 @@
+* Add optional operation time profiling information for each operation, to try to find problematic ones
+	Specifically flag anything with ***Time*** that is over a certain time threshold
+		> Create class AutoTimeOperation and #define TIMEOPERATION(s)
+	Example slow operation, even in single threaded write protect mode:
+		###GetFileInfo 0000
+		GetFileInfo : \
+		Thread 14220 : Time Until before GetFileInformation 0.000170 : MirrorGetFileInformation
+		EleFS::GetFileInformation start 0.000000 fb5bc0
+		EleFS::GetFileInformation mid1 0.000177 fb5bc0
+		EleFS::GetFileInformation mid2 0.000352 fb5bc0
+		EleFS::GetFileInformation mid21 2.246771 fb5bc0
+		EleFS::GetFileInformation mid22 2.247254 fb5bc0
+		EleFS::GetFileInformation mid23 2.249451 fb5bc0
+		ScopedEleFSHeader start 0.000000 0
+		BlockReadWrite start 0.000000 8 0
+		BlockReadWrite while currentBlockPos 0.000721 currentBlockPos 16 toProcess 8
+		BlockReadWrite end 0.002207 8 0
+		ScopedEleFSHeader end 0.003887 0
+		EleFS::GetFileInformation mid24 2.255494 fb5bc0
+		EleFS::GetFileInformation mid3 2.256026 fb5bc0
+		BlockReadWrite start 0.000000 575 0
+		BlockReadWrite while currentBlockPos 0.000789 currentBlockPos 96 toProcess 575
+		BlockReadWrite end 0.001034 575 0
+		EleFS::GetFileInformation mid4 2.258006 fb5bc0
+		EleFS::GetFileInformation end 2.258545 fb5bc0
+				GetFileInformationByHandle success
+										  dwFileAttributes=10
+										  ftCreationTime=0
+										  ftLastAccessTime=0
+										  ftLastWriteTime=0
+										  nFileSizeHigh=0
+										  nFileSizeLow=0
+
+		Thread 14220 : Time Until after GetFileInformation 2.260302 : MirrorGetFileInformation
+		Thread 14220 : Time 2.260549 : MirrorGetFileInformation
+				result =  0
+		  unknown type:54
+				DispatchQueryInformation result =  c000000d
+	>> So between: GetFileInformation mid2 GetFileInformation mid21
+		>>> FSLock _locker2(this, false);
+			EleFS::Lock mid2 0.000509 0
+			EleFS::Lock mid3 2.258143 0
+		>>> So it's the: mLockedHandle = CreateFileW(mFilename.c_str(),GENERIC_READ | GENERIC_WRITE,FILE_SHARE_READ | FILE_SHARE_WRITE,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,0);
+	>> Write caching needed to be enabled on the drive policy...
+		Also: // If writing then make sure we release the file handle to ensure we don't block access for anyone else
+	** However this doesn't make writing as fast as it could be...
+		* It would be better to accumulate locks/unlocks and leave the file open longer if at all possible. To avoid the CreateFileW overhead.
+
+
+
+
 * File crypto version - Extend the mirror example
 	Salt for filename, in hex, then '_', then hex compressed and encrypted filename
 	Use long key, 256 bytes?, based on key plus salt for each file, use file position eor file position shifted based on key size, to use for each byte eor

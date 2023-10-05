@@ -223,8 +223,12 @@ namespace EleFSLib
 
 				UnlockFileEx(mLockedHandle,0,10,0,&mOverlapped);
 
-				CloseHandle(mLockedHandle);
-				mLockedHandle = INVALID_HANDLE_VALUE;
+				// If writing then make sure we release the file handle to ensure we don't block access for anyone else
+				if (mLockedForWrite)
+				{
+					CloseHandle(mLockedHandle);
+					mLockedHandle = INVALID_HANDLE_VALUE;
+				}
 			}
 		}
 	}
