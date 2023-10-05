@@ -181,28 +181,32 @@ namespace EleFSLib
 			// This should not retry that often.
 			do
 			{
-				mLockedHandle = CreateFileW(mFilename.c_str(),GENERIC_READ | GENERIC_WRITE,FILE_SHARE_READ | FILE_SHARE_WRITE,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,0);
+				mLockedHandle = CreateFileW(mFilename.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, 0);
 
 				if (mLockedHandle == INVALID_HANDLE_VALUE)
 				{
 					Sleep(100);
-					printf("****Locked retry %d\n",retry++);
+					printf("****Locked retry %d\n", retry++);
 				}
 			} while (mLockedHandle == INVALID_HANDLE_VALUE);
 
 			// This will block until the lock is gained or there is an error
-			ZeroMemory(&mOverlapped,sizeof(mOverlapped));
+			ZeroMemory(&mOverlapped, sizeof(mOverlapped));
 			mOverlapped.Offset = 0;
-			LockFileEx(mLockedHandle,forWrite?LOCKFILE_EXCLUSIVE_LOCK:0,0,10,0,&mOverlapped);
+			LockFileEx(mLockedHandle, forWrite ? LOCKFILE_EXCLUSIVE_LOCK : 0, 0, 10, 0, &mOverlapped);
 		}
 
 		LARGE_INTEGER totalSize;
-		if (GetFileSizeEx(mLockedHandle,&totalSize))
+		if (GetFileSizeEx(mLockedHandle, &totalSize))
 		{
 			mLastContainerFileSize = totalSize.QuadPart;
 		}
 
-		mLockedForWrite = forWrite;
+		// Accumulate the write lock indicator
+		if (forWrite)
+		{
+			mLockedForWrite = true;
+		}
 		mLockCounter++;
 		return true;
 	}
@@ -214,6 +218,7 @@ namespace EleFSLib
 		if (mLockCounter)
 		{
 			mLockCounter--;
+			// Last lock?
 			if (!mLockCounter)
 			{
 				if (mLockedForWrite)
@@ -229,6 +234,8 @@ namespace EleFSLib
 					CloseHandle(mLockedHandle);
 					mLockedHandle = INVALID_HANDLE_VALUE;
 				}
+
+				mLockedForWrite = false;
 			}
 		}
 	}
