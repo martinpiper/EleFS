@@ -20,6 +20,7 @@ Options:
 #include <stdlib.h>
 #include <winbase.h>
 #include <sddl.h>
+#include <list>
 #include "EleFSLib/Inc/EleFS.h"
 
 using namespace EleFSLib;
@@ -1545,6 +1546,7 @@ void ShowUsage() {
 		"  /a Allocation unit size (ex. /a 512)\t\t Allocation Unit Size of the volume. This will behave on the disk file size.\n"
 		"  /k Sector size (ex. /k 512)\t\t\t Sector Size of the volume. This will behave on the disk file size.\n"
 		"  /r \t\t\t Profile timing for each operation.\n"
+		"  /e \t\t\t Export all files found in the container instead of mounting it as a file system.\n"
 		"  /i (Timeout in Milliseconds ex. /i 30000)\t Timeout until a running operation is aborted and the device is unmounted.\n\n"
 		"Examples:\n"
 		"\tEleFS.exe /p devicePassword /f C:\\Temp\\container.EleFS /l M:\t\t\t# Mount C:\\Temp\\container.EleFS as RootDirectory into a drive of letter M:\\.\n"
@@ -1666,6 +1668,51 @@ int __cdecl wmain(ULONG argc, PWCHAR argv[])
 			command++;
 			dokanOptions->SectorSize = (ULONG)_wtol(argv[command]);
 			break;
+		case L'e':
+		{
+			WIN32_FIND_DATAW	findData;
+			DWORD				error;
+			int count = 0;
+
+			std::list<std::wstring> toFind;
+			toFind.push_back(L"\\");
+
+			while (!toFind.empty())
+			{
+				std::wstring newPath = toFind.front();
+				std::wstring newPath2 = newPath + L"*";
+				toFind.pop_front();
+
+				HANDLE hFind = sFS.FindFirstFileW(newPath2.c_str(), &findData);
+				if (hFind == INVALID_HANDLE_VALUE) {
+					continue;
+				}
+
+				do {
+					if ((wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0))
+					{
+						if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+						{
+							toFind.push_back(newPath + findData.cFileName + L"\\");
+						}
+						else
+						{
+							printf("Found: %S%S\n", ContainerPath , (newPath + findData.cFileName).c_str());
+							count++;
+						}
+					}
+				} while (sFS.FindNextFileW(hFind, &findData) != 0);
+
+				error = GetLastError();
+				sFS.FindClose(hFind);
+			}
+
+			printf("Num %d\n", count);
+
+			exit(0);
+
+			break;
+		}
 		default:
 			fwprintf(stderr, L"unknown command: %s\n", argv[command]);
 			free(dokanOperations);

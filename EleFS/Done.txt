@@ -31,3 +31,7 @@
 
 * Some applications, VLC I'm looking at you, try to open an existing file as a directory. This needs to fail with the correct error code
 	// Look for ERROR_NO_MORE_ITEMS and "CreateFile status = c0000103"
+
+
+
+* Added quick export files option /e
